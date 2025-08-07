@@ -1,7 +1,33 @@
-// https://nuxt.com/docs/api/configuration/nuxt-config
+// ./nuxt.config.ts
+
 export default defineNuxtConfig({
-  compatibilityDate: '2025-07-15',
   devtools: { enabled: true },
-  modules: ['@nuxt/test-utils'],
-  pages:true
+  modules: [
+    '@nuxtjs/tailwindcss',
+    '@nuxtjs/strapi'
+  ],
+  strapi: {
+    // This URL should point to your Strapi v5 backend
+    url: process.env.STRAPI_URL || 'http://localhost:1337',
+    user: {
+      // Tell the module to populate the 'profilePicture' relation
+      populate: ['profilePicture'],
+      // This is a good default to ensure data is always fresh on login/refresh
+      fetchOnLogin: true 
+    }
+  },
+  app: {
+    head: {
+      title: 'Shelfie', // Default title
+      titleTemplate: '%s | Shelfie', // Template for page-specific titles
+      meta: [
+        { charset: 'utf-8' },
+        { name: 'viewport', content: 'width=device-width, initial-scale=1' },
+        { hid: 'description', name: 'description', content: 'Your Digital Collector Shelf for figures, models, and memorabilia.' }
+      ],
+      link: [
+        { rel: 'icon', type: 'image/x-icon', href: '/favicon.ico' } // Example for a favicon
+      ]
+    }
+  }
 })
