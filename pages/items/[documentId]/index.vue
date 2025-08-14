@@ -48,7 +48,7 @@
                         </div>
 
                         <!-- Edit Button -->
-                        <NuxtLink v-if="isOwner" :to="`/items/${item.id}/edit`" class="mt-4 inline-block w-full text-center bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded transition">
+                        <NuxtLink v-if="isOwner" :to="`/items/${docId}/edit`" class="mt-4 inline-block w-full text-center bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded transition">
                             Edit This Item
                         </NuxtLink>
 
