@@ -29,5 +29,17 @@ export default defineNuxtConfig({
         { rel: 'icon', type: 'image/x-icon', href: '/favicon.ico' } // Example for a favicon
       ]
     }
-  }
+  },
+  runtimeConfig: {
+    public: {
+      strapi: {
+        url: process.env.STRAPI_URL || "http://localhost:1337",
+      },
+      // Add this block for Meilisearch
+      meilisearch: {
+        hostURL: process.env.MEILISEARCH_HOST_URL,
+        searchApiKey: process.env.MEILISEARCH_SEARCH_API_KEY,
+      },
+    },
+  },
 })
