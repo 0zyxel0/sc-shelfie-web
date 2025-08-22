@@ -43,10 +43,18 @@
                         <label for="series" class="block text-gray-700 text-sm font-bold mb-2">Series</label>
                         <input v-model="form.series" id="series" type="text" placeholder="e.g., Vocaloid" class="form-input">
                     </div>
-                    <div>
-                        <label for="categories" class="block text-gray-700 text-sm font-bold mb-2">Categories <span class="font-normal text-gray-500">(comma-separated)</span></label>
-                        <input v-model="form.categories" id="categories" type="text" placeholder="e.g., Nendoroid, Limited" class="form-input">
-                    </div>
+                </div>
+
+                <!-- UPDATED: Categories now uses TagInput -->
+                <div class="mb-4">
+                    <label for="categories" class="block text-gray-700 text-sm font-bold mb-2">Categories</label>
+                    <TagInput v-model="form.categories" placeholder="e.g., Nendoroid, Limited" />
+                </div>
+
+                <!-- UPDATED: Tags now uses TagInput -->
+                <div class="mb-4">
+                    <label for="tags" class="block text-gray-700 text-sm font-bold mb-2">Tags</label>
+                    <TagInput v-model="form.tags" placeholder="e.g., rare, custom paint" />
                 </div>
 
                 <!-- Purchase Info -->
@@ -106,7 +114,11 @@ const docId = route.params.documentId;
 const strapiUrl = config.public.strapi.url;
 
 // Reactive state for the form
-const form = reactive({ name: '', itemStatus: 'Owned', description: '', isPrivate: false, purchasePrice: null, purchaseDate: null, manufacturer: '', character: '', series: '', categories: '' });
+const form = reactive({
+    name: '', itemStatus: 'Owned', description: '', isPrivate: false, purchasePrice: null, purchaseDate: null, manufacturer: '', character: '', series: '',
+    categories: [],
+    tags: [],
+});
 const loading = ref(false);
 const errorMessage = ref(null);
 
@@ -119,7 +131,7 @@ const { data: item, pending, error } = await useAsyncData(
             filters: {
                 documentId: { $eq: docId }
             },
-            populate: ['manufacturer', 'character', 'series', 'categories']
+            populate: ['manufacturer', 'character', 'series', 'categories', 'tags']
         });
         // The URL now uses a filter instead of a path parameter
         return await $fetch(`${strapiUrl}/api/items?${query}`, {
@@ -150,7 +162,8 @@ watch(item, (newItem) => {
         form.manufacturer = newItem.manufacturer?.data?.attributes.name || '';
         form.character = newItem.character?.data?.attributes.name || '';
         form.series = newItem.series?.data?.attributes.name || '';
-        form.categories = (newItem.categories?.data || []).map(c => c.attributes.name).join(', ');
+        form.categories = (newItem.categories || []).map(c => c.name);
+        form.tags = (newItem.tags || []).map(t => t.name);
     }
 }, { immediate: true });
 
@@ -177,10 +190,13 @@ const handleUpdate = async () => {
         const manufacturerId = await findOrCreate('manufacturers', form.manufacturer);
         const characterId = await findOrCreate('characters', form.character);
         const seriesId = await findOrCreate('serieses', form.series);
-        const categoryIds = await Promise.all(
-            form.categories.split(',').map(name => findOrCreate('categories', name.trim())).filter(p => p)
-        );
 
+        const categoryIds = await Promise.all(
+            form.categories.map(name => findOrCreate('categories', name))
+        );
+        const tagIds = await Promise.all(
+            form.tags.map(name => findOrCreate('tags', name))
+        );
         const payload = {
             data: {
                 name: form.name,
@@ -192,7 +208,8 @@ const handleUpdate = async () => {
                 manufacturer: manufacturerId,
                 character: characterId,
                 series: seriesId,
-                categories: categoryIds,
+                categories: categoryIds.filter(id => id),
+                tags: tagIds.filter(id => id),
             }
         };
 

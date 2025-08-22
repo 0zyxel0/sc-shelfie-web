@@ -6,18 +6,18 @@
         </div>
 
         <!-- Error State -->
-        <div v-else-if="error" class="flex justify-center items-center h-screen">
+        <div v-else-if="error || !item" class="flex justify-center items-center h-screen">
             <div class="text-center">
                 <h2 class="text-2xl text-red-600 font-bold mb-2">Failed to load item</h2>
                 <p class="text-gray-600">The item could not be found or an error occurred.</p>
-                <NuxtLink to="/" class="mt-4 inline-block text-blue-500 hover:underline">Go to Homepage</NuxtLink>
+                <NuxtLink to="/" class="mt-4 inline-block text-blue-500 hover:underline">Go back home</NuxtLink>
             </div>
         </div>
 
         <!-- Content Display -->
-        <div v-else-if="item" class="container mx-auto p-4 md:p-8">
+        <div v-else class="container mx-auto p-4 md:p-8">
             <div class="bg-white rounded-lg shadow-xl overflow-hidden">
-                <div class="grid grid-cols-1 lg:grid-cols-5 gap-0">
+                <div class="grid grid-cols-1 lg:grid-cols-5">
 
                     <!-- Column 1: Image Gallery -->
                     <div class="lg:col-span-3 p-6">
@@ -37,20 +37,28 @@
                         <!-- Header -->
                         <div class="flex justify-between items-start">
                             <h1 class="text-3xl font-bold text-gray-900 tracking-tight">{{ item.name }}</h1>
-                            <span class="ml-4 text-sm font-medium py-1 px-3 rounded-full capitalize" :class="statusBadgeClass">{{ item.status }}</span>
+                            <span class="ml-4 text-sm font-medium py-1 px-3 rounded-full capitalize" :class="statusBadgeClass">{{ item.itemStatus }}</span>
                         </div>
 
                         <!-- Owner Info -->
                         <div v-if="item.user" class="mt-2">
                             <p class="text-sm text-gray-500">
-                                Cataloged by <NuxtLink :to="`/users/${item.user.username}`" class="font-medium text-blue-600 hover:underline">{{ item.user.username }}</NuxtLink>
+                                Cataloged by <NuxtLink :to="`/users/${item.user.username}`" class="font-medium text-blue-600 hover:underline">@{{ item.user.username }}</NuxtLink>
                             </p>
                         </div>
 
-                        <!-- Edit Button -->
-                        <NuxtLink v-if="isOwner" :to="`/items/${docId}/edit`" class="mt-4 inline-block w-full text-center bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded transition">
-                            Edit This Item
-                        </NuxtLink>
+                        <!-- Likes & Edit Buttons -->
+                        <div class="flex items-center space-x-4 mt-4">
+                            <button @click="toggleLike" :disabled="likePending || !currentUser" class="flex items-center space-x-2 py-2 px-4 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed" :class="isLiked ? 'bg-red-500 text-white' : 'bg-gray-200 hover:bg-gray-300 text-gray-800'">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" :fill="isLiked ? 'currentColor' : 'none'" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 016.364 0L12 7.636l1.318-1.318a4.5 4.5 0 116.364 6.364L12 20.364l-7.682-7.682a4.5 4.5 0 010-6.364z" />
+                                </svg>
+                                <span>{{ likeCount }}</span>
+                            </button>
+                            <NuxtLink v-if="isOwner" :to="`/items/${docId}/edit`" class="inline-block bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg">
+                                Edit Item
+                            </NuxtLink>
+                        </div>
 
                         <!-- Metadata Section -->
                         <div class="mt-6">
@@ -68,20 +76,6 @@
                                     <dt class="font-medium text-gray-800">Series</dt>
                                     <dd>{{ item.series.name }}</dd>
                                 </div>
-                                <div v-if="item.rating" class="flex justify-between items-center">
-                                    <dt class="font-medium text-gray-800">My Rating</dt>
-                                    <dd class="flex items-center">
-                                        <span v-for="i in 5" :key="i" class="text-xl" :class="i <= item.rating ? 'text-yellow-400' : 'text-gray-300'">★</span>
-                                    </dd>
-                                </div>
-                                <div v-if="item.purchasePrice" class="flex justify-between">
-                                    <dt class="font-medium text-gray-800">Purchase Price</dt>
-                                    <dd>$ {{ item.purchasePrice }}</dd>
-                                </div>
-                                <div v-if="item.purchaseDate" class="flex justify-between">
-                                    <dt class="font-medium text-gray-800">Acquired Date</dt>
-                                    <dd>{{ new Date(item.purchaseDate).toLocaleDateString() }}</dd>
-                                </div>
                             </dl>
                         </div>
 
@@ -94,15 +88,53 @@
                                 </span>
                             </div>
                         </div>
+                        <div v-if="item.tags?.length > 0" class="mt-6">
+                            <h3 class="font-semibold text-gray-700">Tags</h3>
+                            <div class="mt-2 flex flex-wrap gap-2">
+                                <span v-for="tag in item.tags" :key="tag.id" class="text-xs font-semibold bg-purple-100 text-purple-800 py-1 px-3 rounded-full">
+                                    {{ tag.name }}
+                                </span>
+                            </div>
+                        </div>
 
                         <!-- User Description -->
                         <div v-if="item.description" class="mt-6">
                             <h3 class="font-semibold text-gray-700">My Notes</h3>
-                            <!-- IMPORTANT: Only use v-html if you trust or have sanitized the content from Strapi -->
                             <div class="prose prose-sm mt-2 max-w-none text-gray-600" v-html="item.description"></div>
                         </div>
-
                     </div>
+                </div>
+            </div>
+
+            <!-- Comment Section -->
+            <div class="mt-8 bg-white p-6 rounded-lg shadow-xl">
+                <h2 class="text-2xl font-bold text-gray-800 mb-4">Comments ({{ comments.length }})</h2>
+
+                <!-- Comment Form -->
+                <div class="mb-6">
+                    <div v-if="currentUser">
+                        <textarea v-model="newComment" rows="3" placeholder="Add a public comment..." class="form-input"></textarea>
+                        <button @click="postComment" :disabled="commentPending || !newComment.trim()" class="mt-2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg disabled:bg-blue-400">
+                            Post Comment
+                        </button>
+                    </div>
+                    <div v-else class="text-center p-4 border rounded-lg bg-gray-50">
+                        <p>You must be <NuxtLink to="/auth" class="text-blue-600 font-semibold hover:underline">logged in</NuxtLink> to post a comment.</p>
+                    </div>
+                </div>
+
+                <!-- Comments List -->
+                <div>
+                    <div v-for="comment in comments" :key="comment.id" class="flex space-x-4 py-4 border-t first:border-t-0">
+                        <img :src="getStrapiMedia(comment.user?.profilePicture?.url) || '/avatar-placeholder.png'" class="h-10 w-10 rounded-full object-cover flex-shrink-0">
+                        <div class="flex-1">
+                            <p class="font-semibold text-gray-800">
+                                <NuxtLink :to="`/users/${comment.user.username}`" class="hover:underline">@{{ comment.user.username }}</NuxtLink>
+                            </p>
+                            <div class="prose prose-sm mt-1 max-w-none text-gray-600" v-html="comment.content"></div>
+                        </div>
+                    </div>
+                    <p v-if="comments.length === 0" class="text-gray-500 pt-4">Be the first to comment!</p>
                 </div>
             </div>
         </div>
@@ -110,56 +142,72 @@
 </template>
 
 <script setup>
-import { computed } from 'vue';
 import qs from 'qs';
-
+import { ref, computed } from 'vue';
 const route = useRoute();
-const loggedInUser = useStrapiUser();
+const router = useRouter();
+const docId = route.params.documentId;
+const currentUser = useStrapiUser();
 const token = useStrapiToken();
 const config = useRuntimeConfig();
 
-// --- KEY CHANGE HERE ---
-// Get the documentId from the route parameters.
-const docId = route.params.documentId;
-
-const headers = token.value ? { Authorization: `Bearer ${token.value}` } : {};
-
-const queryParams = {
-    populate: {
-        user: { fields: ['username'] },
-        userImages: { fields: ['url', 'name', 'alternativeText'] },
-        manufacturer: { fields: ['name'] },
-        series: { fields: ['name'] },
-        character: { fields: ['name'] },
-        categories: { fields: ['name'] }
-    }
-};
-
-const queryString = qs.stringify(queryParams, { encodeValuesOnly: true });
-
-// --- KEY CHANGE HERE ---
-// We now query the API using the documentId.
-// Note: Strapi's API for finding a single entry uses the standard `id` in the URL path.
-// If your `documentId` is different from the numeric ID, we need to query by it as a filter.
-// We will try the most common approach first.
-const fullUrl = `${config.public.strapi.url}/api/items/${docId}?${queryString}`;
-
-
-const { data: item, pending, error } = await useAsyncData(
-    `item-${docId}`, // Use docId in the key for uniqueness
-    () => $fetch(fullUrl, { headers: headers }),
-    {
-        transform: (response) => response.data
+// --- 1. Fetch the CORE ITEM DATA ---
+// This is the most important data for the page.
+const { data: itemData, pending: itemPending, error: itemError } = await useAsyncData(
+    `item-details-${docId}`,
+    async () => {
+        const query = qs.stringify({
+            filters: { documentId: { $eq: docId } },
+            populate: ['user', 'userImages', 'manufacturer', 'character', 'series', 'categories', 'tags', 'likedBy']
+        });
+        const response = await $fetch(`${config.public.strapi.url}/api/items?${query}`);
+        if (!response.data || response.data.length === 0) throw new Error('Item not found');
+        // Return the single, flattened item object.
+        return { id: response.data[0].id, ...response.data[0] };
     }
 );
 
-// --- The rest of the script remains exactly the same ---
+// --- 2. Fetch the COMMENTS separately ---
+// This fetch is not critical. If it fails, the page can still render.
+const { data: comments, refresh: refreshComments } = await useAsyncData(
+    `item-comments-${docId}`,
+    async () => {
+        const query = qs.stringify({
+            filters: { item: { documentId: { $eq: docId } } },
+            populate: { user: { populate: 'profilePicture' } },
+            sort: 'createdAt:desc'
+        });
+        const response = await $fetch(`${config.public.strapi.url}/api/comments?${query}`);
+        return (response.data || []).map(c => ({ id: c.id, ...c }));
+    }
+);
+
+// --- Combine pending/error states for the main template ---
+const pending = itemPending;
+const error = itemError;
+const item = itemData; // Use `item` directly in the template for simplicity
+
+useHead({ title: () => item.value ? `${item.value.name} | Shelfie` : 'Item | Shelfie' });
+
+// --- Reactive State for Likes & Comments ---
+const likePending = ref(false);
+const commentPending = ref(false);
+const newComment = ref('');
 const activeImageIndex = ref(0);
 
-const getStrapiMedia = (url) => {
-    if (!url) return null;
-    return `${config.public.strapi.url}${url}`;
-};
+// --- Computed Properties (Now referencing `item.value` directly) ---
+const likeCount = computed(() => item.value?.likedBy?.length || 0);
+
+const isLiked = computed(() => {
+    if (!currentUser.value || !item.value?.likedBy) return false;
+    return item.value.likedBy.some(u => u.id === currentUser.value.id);
+});
+
+const isOwner = computed(() => {
+    return currentUser.value && item.value?.user && currentUser.value.id === item.value.user.id;
+});
+
+const getStrapiMedia = (url) => url ? `${config.public.strapi.url}${url}` : null;
 
 const mainImageUrl = computed(() => {
     if (item.value?.userImages?.length > 0) {
@@ -169,16 +217,9 @@ const mainImageUrl = computed(() => {
     return '/image-placeholder.png';
 });
 
-const isOwner = computed(() => {
-    // We now compare against the numeric ID which should still be present in the response
-    return loggedInUser.value && item.value && loggedInUser.value.id === item.value.user?.id;
-});
-
 const statusBadgeClass = computed(() => {
     if (!item.value) return 'bg-gray-200 text-gray-800';
-    // You may need to update this field name if it's different in your `Item` content type
-    const status = item.value.itemStatus || item.value.status;
-    switch (status) {
+    switch (item.value.itemStatus) {
         case 'Owned': return 'bg-green-100 text-green-800';
         case 'Wishlist': return 'bg-yellow-100 text-yellow-800';
         case 'Pre-ordered': return 'bg-blue-100 text-blue-800';
@@ -187,13 +228,45 @@ const statusBadgeClass = computed(() => {
     }
 });
 
-useHead({
-    title: () => item.value ? `${item.value.name} | Shelfie` : 'Item | Shelfie'
-});
-</script>
+// --- ACTIONS ---
+const toggleLike = async () => {
+    if (!currentUser.value) return router.push('/auth');
+    likePending.value = true;
+    try {
+        const currentLikes = (item.value.likedBy || []).map(u => u.id);
+        const newLikes = isLiked.value
+            ? currentLikes.filter(id => id !== currentUser.value.id)
+            : [...currentLikes, currentUser.value.id];
 
-<style>
-/* For the `prose` class from Tailwind Typography if you install it */
-/* npm install -D @tailwindcss/typography */
-/* Then add `require('@tailwindcss/typography')` to your tailwind.config.js plugins */
+        // Manually update the item data after a successful like
+        const updatedItem = await $fetch(`${config.public.strapi.url}/api/items/${item.value.documentId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token.value}` },
+            body: { data: { likedBy: newLikes } }
+        });
+        // Update our local state with the new data
+        item.value.likedBy = newLikes;
+    } catch (e) { console.error("Failed to toggle like:", e); }
+    finally { likePending.value = false; }
+};
+
+const postComment = async () => {
+    if (!newComment.value.trim()) return;
+    commentPending.value = true;
+    try {
+        await $fetch(`${config.public.strapi.url}/api/comments`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token.value}` },
+            body: { data: { content: newComment.value, item: item.value.documentId, user: currentUser.value.id } }
+        });
+        newComment.value = '';
+        refreshComments(); // Just refetch the comments, not the whole page
+    } catch (e) { console.error("Failed to post comment:", e); }
+    finally { commentPending.value = false; }
+};
+</script>
+<style scoped>
+.form-input {
+    @apply w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 transition-colors;
+}
 </style>

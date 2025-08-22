@@ -68,10 +68,17 @@
                         <label for="series" class="block text-gray-700 text-sm font-bold mb-2">Series</label>
                         <input v-model="tempSeries" id="series" type="text" placeholder="e.g., Vocaloid" class="form-input">
                     </div>
-                    <div>
-                        <label for="categories" class="block text-gray-700 text-sm font-bold mb-2">Categories <span class="font-normal text-gray-500">(comma-separated)</span></label>
-                        <input v-model="tempCategories" id="categories" type="text" placeholder="e.g., Nendoroid, Limited" class="form-input">
-                    </div>
+                </div>
+                <!-- === NEW: Tag Field === -->
+                <div class="mb-4">
+                    <label for="categories" class="block text-gray-700 text-sm font-bold mb-2">Categories</label>
+                    <TagInput v-model="categoriesArray" placeholder="e.g., Nendoroid, Limited" />
+                </div>
+
+                <!-- UPDATED: Tags now uses TagInput -->
+                <div class="mb-4">
+                    <label for="tags" class="block text-gray-700 text-sm font-bold mb-2">Tags</label>
+                    <TagInput v-model="tagsArray" placeholder="e.g., rare, custom paint" />
                 </div>
 
                 <!-- Purchase Price & Date -->
@@ -145,6 +152,8 @@ const tempSeries = ref('');
 const tempCategories = ref('');
 const loading = ref(false);
 const errorMessage = ref(null);
+const categoriesArray = ref([]);
+const tagsArray = ref([]);
 
 let isSubmitting = false;
 
@@ -205,7 +214,10 @@ const handleSubmit = async () => {
         const characterId = await findOrCreate('characters', tempCharacter.value);
         const seriesId = await findOrCreate('serieses', tempSeries.value);
         const categoryIds = await Promise.all(
-            tempCategories.value.split(',').map(name => findOrCreate('categories', name))
+            categoriesArray.value.map(name => findOrCreate('categories', name))
+        );
+        const tagIds = await Promise.all(
+            tagsArray.value.map(name => findOrCreate('tags', name))
         );
 
         const payload = {
@@ -221,7 +233,8 @@ const handleSubmit = async () => {
                 manufacturer: manufacturerId,
                 character: characterId,
                 series: seriesId,
-                categories: categoryIds.filter(id => id !== null)
+                categories: categoryIds.filter(id => id),
+                tags: tagIds.filter(id => id),
             }
         };
 

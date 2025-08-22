@@ -10,7 +10,7 @@
 
             <!-- Loading/Error/Empty States -->
             <div v-if="pending" class="text-center text-gray-500">Searching...</div>
-            <div v-else-if="error" class="text-center text-red-500">Failed to fetch search results.</div>
+            <div v-else-if="error" class="text-center text-red-500">An error occurred during search.</div>
             <div v-else-if="!items || items.length === 0" class="text-center bg-white p-8 rounded-lg">
                 <h3 class="text-xl font-semibold">No results found</h3>
                 <p class="text-gray-500 mt-2">Try searching for something else.</p>
@@ -18,6 +18,7 @@
 
             <!-- Results Grid -->
             <div v-else class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
+                <!-- The ItemCard component works without changes because our transformEntry in Strapi prepared the data! -->
                 <ItemCard v-for="item in items" :key="item.id" :item="item" />
             </div>
         </main>
@@ -25,34 +26,27 @@
 </template>
 
 <script setup>
-import qs from 'qs';
 const route = useRoute();
+const client = useMeilisearch(); // Use our new composable
 const config = useRuntimeConfig();
 
-// Reactive search query from the URL
 const searchQuery = computed(() => route.query.q || '');
 
-// --- Fetch search results from the API ---
-const { data: items, pending, error, refresh } = await useAsyncData(
-    'search-results',
+// --- Fetch search results from MEILISEARCH ---
+const { data: items, pending, error } = await useAsyncData(
+    'meilisearch-results',
     async () => {
-        const query = qs.stringify({
-            // Strapi's deep filtering to search across multiple fields
-            filters: {
-                $or: [
-                    { name: { $containsi: searchQuery.value } },
-                    { character: { name: { $containsi: searchQuery.value } } },
-                    { series: { name: { $containsi: searchQuery.value } } },
-                    { manufacturer: { name: { $containsi: searchQuery.value } } },
-                ],
-                isPrivate: { $eq: false } // Only search public items
-            },
-            populate: { userImages: { fields: ['url'] }, user: { fields: ['username'] } },
+        if (!searchQuery.value) return [];
+
+        const searchResults = await client.index('items').search(searchQuery.value, {
+            limit: 25, // Limit results
         });
-        return await $fetch(`${config.public.strapi.url}/api/items?${query}`);
+
+        return searchResults.hits;
     },
     {
-        transform: (response) => response.data.map(item => ({ id: item.id, ...item })),
+        // The result from Meilisearch (`hits`) is already a clean array of flat objects.
+        // No transform is needed here.
         watch: [searchQuery] // Re-run the fetch whenever the search query changes
     }
 );
