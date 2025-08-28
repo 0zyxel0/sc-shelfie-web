@@ -20,6 +20,15 @@
             </span>
             <p class="text-md text-gray-500">@{{ user.username }}</p>
             <p class="text-sm text-gray-400 mt-1">Member since {{ memberSince }}</p>
+
+            <div class="mt-2 flex items-center justify-center sm:justify-start space-x-4 text-sm text-gray-600">
+              <NuxtLink to="/profile/connections?tab=following" class="hover:underline">
+                <span class="font-bold text-gray-800">{{ user.following.length }}</span> Following
+              </NuxtLink>
+              <NuxtLink to="/profile/connections?tab=followers" class="hover:underline">
+                <span class="font-bold text-gray-800">{{ user.followers.length }}</span> Followers
+              </NuxtLink>
+            </div>
           </div>
           <!-- Action Buttons -->
           <div class="flex space-x-2 mt-4 sm:mt-0">
@@ -86,7 +95,7 @@ const { data: profileData, pending: userPending } = await useAsyncData(
   'profile-data',
   async () => {
     if (!token.value) return null;
-    const query = qs.stringify({ populate: 'profilePicture' });
+    const query = qs.stringify({ populate: ['profilePicture', 'followers', 'following'] });
     return await $fetch(`${config.public.strapi.url}/api/users/me?${query}`, {
       headers: {
         Authorization: `Bearer ${token.value}`,

@@ -28,6 +28,7 @@
           <template v-if="user">
             <!-- Desktop Navigation -->
             <nav class="hidden md:flex items-center space-x-6 text-sm font-medium text-gray-600">
+              <NuxtLink to="/feed" class="hover:text-blue-500" active-class="text-blue-600 font-semibold">Feed</NuxtLink>
               <NuxtLink to="/my-shelf" class="hover:text-blue-500" active-class="text-blue-600 font-semibold">My Shelf</NuxtLink>
               <NuxtLink to="/profile" class="hover:text-blue-500" active-class="text-blue-600 font-semibold">Profile</NuxtLink>
             </nav>
@@ -46,6 +47,7 @@
               </button>
               <div v-if="isMenuOpen" class="absolute top-16 right-4 w-48 bg-white rounded-md shadow-lg ring-1 ring-black ring-opacity-5 z-50">
                 <div class="py-1">
+                  <NuxtLink to="/feed" @click="isMenuOpen = false" class="block ...">Feed</NuxtLink>
                   <NuxtLink to="/my-shelf" @click="isMenuOpen = false" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">My Shelf</NuxtLink>
                   <NuxtLink to="/profile" @click="isMenuOpen = false" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Profile</NuxtLink>
                 </div>
