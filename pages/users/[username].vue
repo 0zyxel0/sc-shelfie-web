@@ -30,6 +30,20 @@
                             <h1 class="text-3xl font-bold text-gray-800">{{ user.displayName || user.username }}</h1>
                             <p class="text-md text-gray-500">@{{ user.username }}</p>
                             <p class="text-sm text-gray-400 mt-1">Member since {{ memberSince }}</p>
+                            <div class="mt-2 flex items-center justify-center sm:justify-start space-x-4 text-sm text-gray-600">
+                                <div>
+                                    <span class="font-bold text-gray-800">{{ user.following.length }}</span> Following
+                                </div>
+                                <div>
+                                    <span class="font-bold text-gray-800">{{ user.followers.length }}</span> Followers
+                                </div>
+                            </div>
+                            <div v-if="currentUser && currentUser.documentId !== user.documentId" class="mt-4 sm:mt-0">
+                                <button @click="toggleFollow" :disabled="followPending" class="w-full sm:w-auto font-bold py-2 px-6 rounded-full transition-colors duration-200 disabled:opacity-50" :class="isFollowing ? 'bg-gray-200 text-gray-800 hover:bg-gray-300' : 'bg-blue-600 text-white hover:bg-blue-700'">
+                                    <span v-if="followPending">...</span>
+                                    <span v-else>{{ isFollowing ? 'Following' : 'Follow' }}</span>
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -44,7 +58,7 @@
 
                 <!-- Grid of Items -->
                 <div v-else class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
-                    <ItemCard v-for="item in userItems" :key="item.id" :item="item" />
+                    <ItemCard v-for="item in userItems" :key="item.documentId" :item="item" />
                 </div>
             </div>
         </main>
@@ -54,19 +68,23 @@
 <script setup>
 import qs from 'qs';
 
+
 const route = useRoute();
 const config = useRuntimeConfig();
 const username = route.params.username;
+const currentUser = useStrapiUser();
+const token = useStrapiToken();
 
 useHead({ title: () => `@${username}'s Profile | Shelfie` });
 
 // --- Fetch both user and their public items in parallel ---
-const { data, pending, error } = await useAsyncData(
+const { data, pending, error, refresh } = await useAsyncData(
     `public-profile-${username}`,
     async () => {
+        const loggedInUserId = currentUser.value?.id;
         // 1. Fetch the user's public profile data (username, displayName, avatar, etc.)
         const userQuery = qs.stringify({
-            populate: 'profilePicture'
+            populate: ['profilePicture', 'followers', 'following']
         });
         const userPromise = $fetch(`${config.public.strapi.url}/api/users?filters[username][$eq]=${username}&${userQuery}`);
 
@@ -84,8 +102,12 @@ const { data, pending, error } = await useAsyncData(
         });
         const itemsPromise = $fetch(`${config.public.strapi.url}/api/items?${itemsQuery}`);
 
+        const followingPromise = loggedInUserId
+            ? $fetch(`${config.public.strapi.url}/api/users/${loggedInUserId}?populate=following`)
+            : Promise.resolve(null); // Resolve to null if no one is logged in
+
         // Wait for both API calls to complete
-        const [userResponse, itemsResponse] = await Promise.all([userPromise, itemsPromise]);
+        const [userResponse, itemsResponse, followingResponse] = await Promise.all([userPromise, itemsPromise, followingPromise]);
 
         // If the userPromise returns an empty array, the user doesn't exist.
         if (!userResponse || userResponse.length === 0) {
@@ -94,15 +116,23 @@ const { data, pending, error } = await useAsyncData(
         }
 
         return {
-            user: userResponse[0], // The user object
-            items: (itemsResponse.data || []).map(item => ({ id: item.id, ...item })) // The transformed item array
+            user: userResponse[0], // The user whose profile is being viewed
+            items: (itemsResponse.data || []).map(item => ({ id: item.documentId, ...item })), // Their items
+            currentUserFollowing: followingResponse?.following || [] // The logged-in user's following list
         };
     }
 );
 
 // --- Computed properties to safely access the fetched data ---
+const followPending = ref(false);
+
 const user = computed(() => data.value?.user);
 const userItems = computed(() => data.value?.items);
+
+const isFollowing = computed(() => {
+    if (!user.value || !data.value?.currentUserFollowing) return false;
+    return data.value.currentUserFollowing.some(followedUser => followedUser.id === user.value.id);
+});
 
 const profilePictureUrl = computed(() => {
     if (user.value?.profilePicture?.url) {
@@ -120,4 +150,35 @@ const memberSince = computed(() => {
     }
     return '';
 });
+
+// --- THE NEW, SIMPLIFIED toggleFollow FUNCTION ---
+const toggleFollow = async () => {
+    if (!currentUser.value || !user.value) return;
+    followPending.value = true;
+
+    try {
+        let endpoint = '';
+
+        if (isFollowing.value) {
+            // UNFOLLOW
+            endpoint = `${config.public.strapi.url}/api/users/${user.value.id}/unfollow`;
+        } else {
+            // FOLLOW
+            endpoint = `${config.public.strapi.url}/api/users/${user.value.id}/follow`;
+        }
+
+        // Call our new custom endpoint. The body is now empty!
+        await $fetch(endpoint, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token.value}` }
+        });
+
+        // We still refresh to get the latest follower count and button state.
+        refresh();
+    } catch (e) {
+        console.error("Failed to toggle follow:", e);
+    } finally {
+        followPending.value = false;
+    }
+};
 </script>
