@@ -30,8 +30,14 @@
             <nav class="hidden md:flex items-center space-x-6 text-sm font-medium text-gray-600">
               <NuxtLink to="/feed" class="hover:text-blue-500" active-class="text-blue-600 font-semibold">Feed</NuxtLink>
               <NuxtLink to="/my-shelf" class="hover:text-blue-500" active-class="text-blue-600 font-semibold">My Shelf</NuxtLink>
+              <NuxtLink to="/calendar" class="hover:text-blue-500" active-class="text-blue-600 font-semibold">Calendar</NuxtLink>
               <NuxtLink to="/profile" class="hover:text-blue-500" active-class="text-blue-600 font-semibold">Profile</NuxtLink>
             </nav>
+
+            <!-- Go Premium Button (for non-premium users) -->
+            <NuxtLink v-if="!isPremiumUser" to="/go-premium" class="hidden sm:block bg-gradient-to-r from-yellow-400 to-orange-500 hover:from-yellow-500 hover:to-orange-600 text-white font-semibold py-2 px-4 rounded-full transition-all text-sm shadow">
+              Go Premium
+            </NuxtLink>
 
             <!-- Add Item Button -->
             <NuxtLink to="/items/new" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-full transition-colors duration-300 text-sm">
@@ -49,7 +55,11 @@
                 <div class="py-1">
                   <NuxtLink to="/feed" @click="isMenuOpen = false" class="block ...">Feed</NuxtLink>
                   <NuxtLink to="/my-shelf" @click="isMenuOpen = false" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">My Shelf</NuxtLink>
+                  <NuxtLink to="/calendar" @click="isMenuOpen = false" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Calendar</NuxtLink>
                   <NuxtLink to="/profile" @click="isMenuOpen = false" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Profile</NuxtLink>
+                  <div v-if="!isPremiumUser" class="border-t my-1">
+                    <NuxtLink to="/go-premium" @click="isMenuOpen = false" class="block px-4 py-2 text-sm text-yellow-600 font-semibold hover:bg-gray-100">Go Premium</NuxtLink>
+                  </div>
                 </div>
               </div>
             </div>
@@ -81,4 +91,9 @@ const performSearch = () => {
     router.push(`/search?q=${searchQuery.value.trim()}`);
   }
 };
+
+
+const isPremiumUser = computed(() => {
+  return user.value?.role?.name === 'Premium';
+});
 </script>
