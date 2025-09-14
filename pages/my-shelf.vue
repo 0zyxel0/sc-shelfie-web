@@ -138,7 +138,7 @@ const { data: items, pending } = await useAsyncData(
     async () => {
         if (!user.value?.id) return { data: [] };
         const query = qs.stringify({
-            populate: ['userImages', 'manufacturer', 'character', 'series', 'categories', 'tags'],
+            populate: ['userImages', 'manufacturer', 'character', 'series', 'categories', 'itags'],
             filters: { user: { id: { $eq: user.value.id } } },
             'pagination[pageSize]': 2500,
             sort: 'createdAt:desc',
@@ -181,7 +181,7 @@ const statusOptions = computed(() => ['All', 'Owned', 'Wishlist', 'Pre-ordered',
 const categoryOptions = computed(() => getUniqueOptions('categories'));
 const manufacturerOptions = computed(() => getUniqueOptions('manufacturer'));
 const seriesOptions = computed(() => getUniqueOptions('series'));
-const tagOptions = computed(() => getUniqueOptions('tags'));
+const tagOptions = computed(() => getUniqueOptions('itags'));
 
 const resetFilters = () => {
     filters.status = 'All';
@@ -199,7 +199,7 @@ const filteredItems = computed(() => {
         const categoryMatch = filters.category === 'All' || (item.categories && item.categories.some(c => c.name === filters.category));
         const manufacturerMatch = filters.manufacturer === 'All' || (item.manufacturer && item.manufacturer.name === filters.manufacturer);
         const seriesMatch = filters.series === 'All' || (item.series && item.series.name === filters.series);
-        const tagMatch = filters.tag === 'All' || (item.tags && item.tags.some(t => t.name === filters.tag));
+        const tagMatch = filters.tag === 'All' || (item.itags && item.itags.some(t => t.name === filters.tag));
         return statusMatch && categoryMatch && manufacturerMatch && seriesMatch && tagMatch;
     });
 });
@@ -224,7 +224,7 @@ const exportToCSV = async () => {
         Character: item.character?.data?.attributes.name || 'N/A',
         PurchasePrice: item.purchasePrice || 0,
         PurchaseDate: item.purchaseDate ? new Date(item.purchaseDate).toLocaleDateString() : 'N/A',
-        Tags: (item.tags?.data || []).map(t => t.attributes.name).join(' | '),
+        itags: (item.itags?.data || []).map(t => t.attributes.name).join(' | '),
     }));
     const csv = Papa.unparse(dataForExport);
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });

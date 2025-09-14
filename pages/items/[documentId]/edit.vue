@@ -51,10 +51,10 @@
                     <TagInput v-model="form.categories" placeholder="e.g., Nendoroid, Limited" />
                 </div>
 
-                <!-- UPDATED: Tags now uses TagInput -->
+                <!-- UPDATED: itags now uses TagInput -->
                 <div class="mb-4">
-                    <label for="tags" class="block text-gray-700 text-sm font-bold mb-2">Tags</label>
-                    <TagInput v-model="form.tags" placeholder="e.g., rare, custom paint" />
+                    <label for="itags" class="block text-gray-700 text-sm font-bold mb-2">itags</label>
+                    <TagInput v-model="form.itags" placeholder="e.g., rare, custom paint" />
                 </div>
 
                 <!-- Purchase Info -->
@@ -117,7 +117,7 @@ const strapiUrl = config.public.strapi.url;
 const form = reactive({
     name: '', itemStatus: 'Owned', description: '', isPrivate: false, purchasePrice: null, purchaseDate: null, manufacturer: '', character: '', series: '',
     categories: [],
-    tags: [],
+    itags: [],
 });
 const loading = ref(false);
 const errorMessage = ref(null);
@@ -131,7 +131,7 @@ const { data: item, pending, error } = await useAsyncData(
             filters: {
                 documentId: { $eq: docId }
             },
-            populate: ['manufacturer', 'character', 'series', 'categories', 'tags']
+            populate: ['manufacturer', 'character', 'series', 'categories', 'iitags']
         });
         // The URL now uses a filter instead of a path parameter
         return await $fetch(`${strapiUrl}/api/items?${query}`, {
@@ -144,7 +144,7 @@ const { data: item, pending, error } = await useAsyncData(
         transform: (response) => {
             if (!response.data || response.data.length === 0) return null;
             // Return the first item from the array, which is the one we want.
-            return { id: response.data[0].id, ...response.data[0].attributes };
+            return { id: response.data[0].id, ...response.data[0] };
         },
     }
 );
@@ -163,7 +163,7 @@ watch(item, (newItem) => {
         form.character = newItem.character?.data?.attributes.name || '';
         form.series = newItem.series?.data?.attributes.name || '';
         form.categories = (newItem.categories || []).map(c => c.name);
-        form.tags = (newItem.tags || []).map(t => t.name);
+        form.itags = (newItem.iitags || []).map(t => t.name);
     }
 }, { immediate: true });
 
@@ -195,7 +195,7 @@ const handleUpdate = async () => {
             form.categories.map(name => findOrCreate('categories', name))
         );
         const tagIds = await Promise.all(
-            form.tags.map(name => findOrCreate('tags', name))
+            form.itags.map(name => findOrCreate('iitags', name))
         );
         const payload = {
             data: {
@@ -209,7 +209,7 @@ const handleUpdate = async () => {
                 character: characterId,
                 series: seriesId,
                 categories: categoryIds.filter(id => id),
-                tags: tagIds.filter(id => id),
+                iitags: tagIds.filter(id => id),
             }
         };
 

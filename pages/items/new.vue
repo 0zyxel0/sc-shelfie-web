@@ -128,6 +128,7 @@
 <script setup>
 definePageMeta({ middleware: 'auth' });
 useHead({ title: 'Add New Item | Shelfie' });
+import qs from 'qs'; // Make sure qs is imported
 
 const token = useStrapiToken();
 const config = useRuntimeConfig();
@@ -173,18 +174,35 @@ const removeImage = (index) => {
 
 const findOrCreate = async (endpoint, name) => {
     if (!name?.trim()) return null;
+
     const headers = {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${token.value}`
     };
-    const query = new URLSearchParams({ 'filters[name][$eqi]': name.trim() }).toString();
+
+    // Use `qs` to correctly format the filter query string
+    const query = qs.stringify({
+        filters: {
+            name: {
+                $eqi: name.trim() // `$eqi` for case-insensitive search
+            }
+        }
+    }, { encodeValuesOnly: true });
+
     const { data: existing } = await $fetch(`${strapiUrl}/api/${endpoint}?${query}`, { headers });
-    if (existing?.[0]) return existing[0].id;
+
+    if (existing?.[0]) {
+        // Return the numeric ID from the response
+        return existing[0].id;
+    }
+
+    // If not found, create it
     const { data: created } = await $fetch(`${strapiUrl}/api/${endpoint}`, {
         method: 'POST',
         headers,
         body: { data: { name: name.trim() } }
     });
+    // Return the numeric ID from the new entry
     return created?.id;
 };
 
@@ -217,7 +235,7 @@ const handleSubmit = async () => {
             categoriesArray.value.map(name => findOrCreate('categories', name))
         );
         const tagIds = await Promise.all(
-            tagsArray.value.map(name => findOrCreate('tags', name))
+            tagsArray.value.map(name => findOrCreate('itags', name))
         );
 
         const payload = {
@@ -234,7 +252,7 @@ const handleSubmit = async () => {
                 character: characterId,
                 series: seriesId,
                 categories: categoryIds.filter(id => id),
-                tags: tagIds.filter(id => id),
+                itags: tagIds.filter(id => id),
             }
         };
 
