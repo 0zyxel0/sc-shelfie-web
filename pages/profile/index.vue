@@ -2,6 +2,28 @@
   <div>
     <main class="container mx-auto py-8 px-4">
 
+      <div v-if="user && !user.emailVerified" class="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 rounded-md shadow-md mb-8" role="alert">
+        <div class="flex">
+          <div class="py-1">
+            <svg class="h-6 w-6 text-yellow-500 mr-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+              <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.21 3.03-1.742 3.03H4.42c-1.532 0-2.492-1.696-1.742-3.03l5.58-9.92zM10 13a1 1 0 110-2 1 1 0 010 2zm-1-8a1 1 0 011-1h.008a1 1 0 110 2H10a1 1 0 01-1-1z" clip-rule="evenodd" />
+            </svg>
+          </div>
+          <div>
+            <p class="font-bold">Verify Your Email Address</p>
+            <p class="text-sm">
+              Please check your inbox for a verification link.
+              <button @click="resendEmail" :disabled="resendStatus !== 'idle'" class="ml-1 font-semibold underline hover:text-yellow-800 disabled:opacity-50 disabled:cursor-not-allowed">
+                <span v-if="resendStatus === 'sending'">Sending...</span>
+                <span v-else>Resend Email</span>
+              </button>
+            </p>
+            <p v-if="resendStatus === 'success'" class="text-sm mt-1 font-medium text-green-700">A new verification email has been sent!</p>
+            <p v-if="resendStatus === 'error'" class="text-sm mt-1 font-medium text-red-700">Failed to send email. Please try again later.</p>
+          </div>
+        </div>
+      </div>
+
       <!-- Profile Header Card -->
       <div v-if="user" class="bg-white p-6 rounded-lg shadow-lg mb-8">
         <div class="flex flex-col sm:flex-row items-center">
@@ -180,6 +202,25 @@ const recentItems = computed(() => {
   // Show the 4 most recently added "Owned" items
   return userItems.value.filter(i => i.itemStatus === 'Owned').slice(0, 4);
 });
+
+const resendStatus = ref('idle'); // 'idle', 'sending', 'success', 'error'
+
+const resendEmail = async () => {
+  resendStatus.value = 'sending';
+  try {
+    await $fetch(`${config.public.strapi.url}/api/users/resend-verification-email`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token.value}` },
+    });
+    resendStatus.value = 'success';
+    // Hide the success message after a few seconds
+    setTimeout(() => { resendStatus.value = 'idle'; }, 5000);
+  } catch (e) {
+    console.error("Failed to resend verification email:", e);
+    resendStatus.value = 'error';
+    setTimeout(() => { resendStatus.value = 'idle'; }, 5000);
+  }
+};
 
 // --- Update the template's data source ---
 const user = profileData;

@@ -88,10 +88,10 @@
                                 </span>
                             </div>
                         </div>
-                        <div v-if="item.tags?.length > 0" class="mt-6">
+                        <div v-if="item.itags?.length > 0" class="mt-6">
                             <h3 class="font-semibold text-gray-700">Tags</h3>
                             <div class="mt-2 flex flex-wrap gap-2">
-                                <span v-for="tag in item.tags" :key="tag.id" class="text-xs font-semibold bg-purple-100 text-purple-800 py-1 px-3 rounded-full">
+                                <span v-for="tag in item.itags" :key="tag.id" class="text-xs font-semibold bg-purple-100 text-purple-800 py-1 px-3 rounded-full">
                                     {{ tag.name }}
                                 </span>
                             </div>
@@ -158,7 +158,7 @@ const { data: itemData, pending: itemPending, error: itemError } = await useAsyn
     async () => {
         const query = qs.stringify({
             filters: { documentId: { $eq: docId } },
-            populate: ['user', 'userImages', 'manufacturer', 'character', 'series', 'categories', 'tags', 'likedBy']
+            populate: ['user', 'userImages', 'manufacturer', 'character', 'series', 'categories', 'itags', 'likedBy']
         });
         const response = await $fetch(`${config.public.strapi.url}/api/items?${query}`);
         if (!response.data || response.data.length === 0) throw new Error('Item not found');

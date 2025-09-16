@@ -1,37 +1,34 @@
 <template>
-  <div>
+  <!-- Main container with standard light theme -->
+  <div class="bg-gray-100 min-h-screen">
+
+    <!-- Tag Filter Bar -->
+    <div class="sticky top-16 bg-white/80 backdrop-blur-lg z-30 border-b border-gray-200">
+      <div class="container mx-auto px-4">
+        <div class="flex items-center space-x-2 overflow-x-auto py-3 scrollbar-hide">
+          <!-- "All" Button -->
+          <button @click="activeTag = null" :class="[...tagButtonBaseClasses, !activeTag ? tagButtonActiveClasses : tagButtonInactiveClasses]">
+            All Items
+          </button>
+          <!-- Tag Buttons -->
+          <button v-for="tag in tags" :key="tag.id" @click="activeTag = tag.name" :class="[...tagButtonBaseClasses, activeTag === tag.name ? tagButtonActiveClasses : tagButtonInactiveClasses]">
+            {{ tag.name }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Main Content Grid -->
     <main class="container mx-auto py-8 px-4">
-      <div class="mb-12">
-        <h1 class="text-4xl md:text-5xl font-bold text-gray-800">Home</h1>
-        <p class="mt-3 text-lg text-gray-600">Discover incredible collectibles from the Shelfie community.</p>
-      </div>
-
-      <!-- Loading State -->
-      <div v-if="pending" class="text-center text-gray-500 py-10">
-        <p>Loading the showcase...</p>
-      </div>
-
-      <!-- Empty State -->
-      <div v-else-if="!items || items.length === 0" class="text-center bg-white p-10 rounded-lg shadow-sm">
-        <h3 class="text-xl font-semibold text-gray-800">The showcase is quiet... for now.</h3>
-        <p class="text-gray-500 mt-2">No public items have been shared yet. Be the first!</p>
+      <div v-if="itemsPending || tagsPending" class="text-center text-gray-500">Loading...</div>
+      <div v-else-if="!filteredItems || filteredItems.length === 0" class="text-center text-gray-500 py-20">
+        <h3 class="text-2xl font-semibold">No results found</h3>
+        <p v-if="activeTag" class="mt-2">Try clearing the filter or exploring other tags.</p>
       </div>
 
       <!-- The Masonry Grid -->
       <div v-else class="masonry-grid">
-        <!-- We use a standard v-for loop -->
-        <div v-for="item in items" :key="item.id" class="masonry-item group relative mb-6 break-inside-avoid rounded-lg overflow-hidden shadow-lg">
-          <NuxtLink :to="'/items/' + (item.documentId || item.id)">
-            <img v-if="item.userImages?.length > 0" :src="`${config.public.strapi.url}${item.userImages[0].url}`" class="w-full h-auto" alt="Item image">
-            <div v-else class="w-full h-48 bg-gray-200 flex items-center justify-center text-gray-400">No Image</div>
-
-            <!-- Hover Overlay -->
-            <div class="absolute inset-0 bg-black/70 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-4">
-              <h3 class="font-bold text-white text-lg truncate">{{ item.name }}</h3>
-              <p v-if="item.user" class="text-sm text-gray-300">by {{ item.user.username }}</p>
-            </div>
-          </NuxtLink>
-        </div>
+        <ShowcaseCard v-for="item in filteredItems" :key="item.id" :item="item" />
       </div>
     </main>
   </div>
@@ -39,80 +36,121 @@
 
 <script setup>
 import qs from 'qs';
-
 useHead({ title: 'Home | Shelfie' });
 
 const config = useRuntimeConfig();
+const activeTag = ref(null);
 
-const { data: items, pending } = await useAsyncData(
-  'public-showcase-items',
+// --- DATA FETCHING (Using separate, stable useAsyncData calls) ---
+const { data: items, pending: itemsPending } = await useAsyncData(
+  'homepage-items',
   async () => {
-    const queryParams = {
+    const query = qs.stringify({
       filters: { isPrivate: { $eq: false } },
-      populate: {
-        userImages: { fields: ['url'] },
-        user: { fields: ['username'] }
-      },
-      pagination: { limit: 50 },
+      populate: '*',
+      pagination: { pageSize: 100 },
       sort: 'createdAt:desc',
-    };
-
-    const queryString = qs.stringify(queryParams, { encodeValuesOnly: true });
-    const fullUrl = `${config.public.strapi.url}/api/items?${queryString}`;
-
-    return await $fetch(fullUrl);
+    }, { encodeValuesOnly: true });
+    const response = await $fetch(`${config.public.strapi.url}/api/items?${query}`);
+    console.log("Fetched items:", response);
+    return response.data;
   },
   {
+    // The proven transform function to flatten data
     transform: (response) => {
-      if (!response?.data) return [];
-      return response.data.map(item => ({ id: item.id, ...item }));
-    },
+      console.log("Transforming items:", response);
+      if (!response) return [];
+      return response.map(item => {
+        const flatItem = { id: item.id, ...item };
+        // This is a simplified transform that you confirmed works for other pages.
+        // Let's ensure relations are also handled if they're nested.
+        if (flatItem.user?.data) { flatItem.user = { id: flatItem.user.data.id, ...flatItem.user.data }; }
+        if (flatItem.itags?.data) { flatItem.itags = flatItem.itags.data.map(t => ({ id: t.id, ...t })); }
+        return flatItem;
+      });
+    }
   }
 );
-</script>
 
+const { data: tags, pending: tagsPending } = await useAsyncData(
+  'homepage-tags',
+  async () => {
+    const response = await $fetch(`${config.public.strapi.url}/api/itags/top`);
+    return response.data || response || [];
+  }
+);
+
+if (process.client) {
+  watch(items, (newItems) => {
+    console.log('✅ Final Transformed items data:', newItems);
+    if (newItems && newItems.length > 0) {
+      console.log('Example itags:', newItems[0].itags);
+    }
+  }, { immediate: true });
+}
+
+
+const pending = computed(() => itemsPending.value || tagsPending.value);
+
+// --- THE CORRECTED FILTERING LOGIC ---
+const filteredItems = computed(() => {
+  const allItems = items.value || [];
+  if (!activeTag.value) {
+    return allItems;
+  }
+
+  return allItems.filter(item => {
+    // Check if the item has the `itags` property (which is now a simple array).
+    if (!item.itags || !Array.isArray(item.itags)) {
+      return false;
+    }
+    // Check if any tag in the now-flat array has a name that matches the activeTag.
+    return item.itags.some(tag => tag.name === activeTag.value);
+  });
+});
+
+// Tailwind classes for buttons
+const tagButtonBaseClasses = ['px-4', 'py-1.5', 'rounded-full', 'text-sm', 'font-semibold', 'transition-colors', 'border', 'flex-shrink-0'];
+const tagButtonActiveClasses = 'bg-blue-600 text-white border-blue-600';
+const tagButtonInactiveClasses = 'bg-white text-gray-600 border-gray-300 hover:bg-gray-100 hover:border-gray-400';
+</script>
 <style scoped>
+/* Masonry grid styles (no changes) */
 .masonry-grid {
-  /* Define the number of columns for different screen sizes */
   column-count: 1;
   column-gap: 1.5rem;
-  /* Corresponds to gap-6 */
 }
 
 @media (min-width: 640px) {
-
-  /* sm */
   .masonry-grid {
     column-count: 2;
   }
 }
 
 @media (min-width: 768px) {
-
-  /* md */
   .masonry-grid {
     column-count: 3;
   }
 }
 
 @media (min-width: 1024px) {
-
-  /* lg */
   .masonry-grid {
     column-count: 4;
   }
 }
 
 @media (min-width: 1280px) {
-
-  /* xl */
   .masonry-grid {
     column-count: 5;
   }
 }
 
-.masonry-item {
-  /* This prevents items from breaking across columns */
-  break-inside: avoid;
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }
 </style>
