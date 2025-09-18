@@ -45,10 +45,10 @@
 
             <div class="mt-2 flex items-center justify-center sm:justify-start space-x-4 text-sm text-gray-600">
               <NuxtLink to="/profile/connections?tab=following" class="hover:underline">
-                <span class="font-bold text-gray-800">{{ user.following.length }}</span> Following
+                <span class="font-bold text-gray-800">{{ user.following?.length || 0 }}</span> Following
               </NuxtLink>
               <NuxtLink to="/profile/connections?tab=followers" class="hover:underline">
-                <span class="font-bold text-gray-800">{{ user.followers.length }}</span> Followers
+                <span class="font-bold text-gray-800">{{ user.followers?.length || 0 }}</span> Followers
               </NuxtLink>
             </div>
           </div>
@@ -103,71 +103,76 @@
 </template>
 
 <script setup>
-import qs from 'qs';
+// REMOVE: `qs` is now used on the server, not the client.
+// import qs from 'qs';
 
 definePageMeta({ middleware: 'auth' });
 
+// `useStrapiAuth` might manage client-side state for the frontend.
+// The actual token logic is now HttpOnly cookie on the server.
 const { logout } = useStrapiAuth();
+
+const { user, isLoading: userLoading, logoutUser } = useAuthUser();
+
+// If user hasn't been fetched yet (e.g., first SSR load), ensure it's fetched.
+// This useAsyncData call will trigger `fetchUser` from `useAuthUser` on the server
+// and hydrate the `user` state.
+await useAsyncData(
+  'initial-auth-user-fetch',
+  async () => {
+    // The `useAuthUser().fetchUser()` handles calling `/api/profile/me`
+    // If `user.value` is already populated (from `useState` during SSR), this will be quick.
+    if (!user.value) {
+      await useAuthUser().fetchUser();
+    }
+    // No need to return anything, as `useAuthUser().user` is already reactive
+  },
+  { server: true, lazy: true } // `lazy:true` can prevent blocking, but ensure `user` is null if fetch fails
+);
 const router = useRouter();
 const config = useRuntimeConfig();
-const token = useStrapiToken();
-
-// --- Fetch FRESH user data ---
-const { data: profileData, pending: userPending } = await useAsyncData(
-  'profile-data',
-  async () => {
-    if (!token.value) return null;
-    const query = qs.stringify({ populate: ['profilePicture', 'followers', 'following'] });
-    return await $fetch(`${config.public.strapi.url}/api/users/me?${query}`, {
-      headers: {
-        Authorization: `Bearer ${token.value}`,
-      },
-    });
-  }
-);
-
 useHead({
-  title: () => profileData.value ? `${profileData.value.displayName || profileData.value.username}'s Profile` : 'My Profile'
+  title: () => user.value ? `${user.value.displayName || user.value.username}'s Profile` : 'My Profile'
 });
 
-// --- Fetch all items for the current user ---
 const { data: userItems, pending: itemsPending } = await useAsyncData(
-  `profile-items-${profileData.value?.id}`,
+  `profile-items-${user.value?.id}`, // The key should still depend on user ID
   async () => {
-    if (!profileData.value?.id) return { data: [] };
+    if (!user.value?.id) return { data: [] };
 
     const queryParams = {
       populate: { userImages: { fields: ['url'] } },
-      filters: { user: { id: { $eq: profileData.value.id } } },
+      filters: { user: { id: { $eq: user.value.id } } },
       'pagination[pageSize]': 1000,
       sort: 'createdAt:desc',
     };
 
-    const queryString = qs.stringify(queryParams, { encodeValuesOnly: true });
-    const fullUrl = `${config.public.strapi.url}/api/items?${queryString}`;
-
-    return await $fetch(fullUrl);
+    return await $fetch('/api/profile/items', {
+      method: 'GET',
+      query: queryParams,
+    });
   },
   {
     transform: (response) => {
       if (!response?.data) return [];
       return response.data.map(item => ({ id: item.id, ...item }));
     },
-    watch: [() => profileData.value?.id]
+    watch: [() => user.value?.id], // Watch the user from useAuthUser
+    server: true
   }
 );
 
 // --- Computed Properties for Display ---
 const profilePictureUrl = computed(() => {
-  if (profileData.value?.profilePicture?.url) {
-    return config.public.strapi.url + profileData.value.profilePicture.url;
+  if (user.value?.profilePicture?.data?.url) {
+    return user.value.profilePicture.data.url || (config.public.strapi.url + user.value.profilePicture.data.url);
   }
   return '/avatar-placeholder.png';
 });
 
 const memberSince = computed(() => {
-  if (profileData.value?.createdAt) {
-    return new Date(profileData.value.createdAt).toLocaleDateString('en-US', {
+  if (user.value?.createdAt) {
+    return new Date(user.value.createdAt).toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'long',
     });
@@ -181,7 +186,6 @@ const collectionStats = computed(() => {
     return { totalItems: 0, wishlistCount: 0, totalValue: '$0.00' };
   }
 
-  // --- FIX: Using `itemStatus` instead of `status` ---
   const ownedItems = userItems.value.filter(i => i.itemStatus === 'Owned');
   const wishlistCount = userItems.value.filter(i => i.itemStatus === 'Wishlist').length;
 
@@ -198,7 +202,6 @@ const collectionStats = computed(() => {
 
 const recentItems = computed(() => {
   if (!userItems.value) return [];
-  // --- FIX: Using `itemStatus` instead of `status` ---
   // Show the 4 most recently added "Owned" items
   return userItems.value.filter(i => i.itemStatus === 'Owned').slice(0, 4);
 });
@@ -208,12 +211,8 @@ const resendStatus = ref('idle'); // 'idle', 'sending', 'success', 'error'
 const resendEmail = async () => {
   resendStatus.value = 'sending';
   try {
-    await $fetch(`${config.public.strapi.url}/api/users/resend-verification-email`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token.value}` },
-    });
+    await $fetch('/api/profile/resend-verification-email', { method: 'POST' });
     resendStatus.value = 'success';
-    // Hide the success message after a few seconds
     setTimeout(() => { resendStatus.value = 'idle'; }, 5000);
   } catch (e) {
     console.error("Failed to resend verification email:", e);
@@ -223,12 +222,19 @@ const resendEmail = async () => {
 };
 
 // --- Update the template's data source ---
-const user = profileData;
-const pending = computed(() => userPending.value || itemsPending.value);
+// `user` is now already reactive from `useAuthUser`
+const pending = computed(() => userLoading.value || itemsPending.value);
 
 // --- Actions ---
 const handleLogout = async () => {
-  await logout();
-  router.push('/auth');
+  try {
+    // This now calls our enhanced logout function which includes clearNuxtData()
+    await logoutUser();
+  } catch (e) {
+    console.error("Logout failed on page:", e);
+  } finally {
+    // Redirect after logout is complete
+    router.push('/auth');
+  }
 };
 </script>

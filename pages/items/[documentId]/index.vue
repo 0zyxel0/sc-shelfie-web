@@ -6,10 +6,10 @@
         </div>
 
         <!-- Error State -->
-        <div v-else-if="error || !item" class="flex justify-center items-center h-screen">
+        <div v-else-if="error || !pageData" class="flex justify-center items-center h-screen">
             <div class="text-center">
                 <h2 class="text-2xl text-red-600 font-bold mb-2">Failed to load item</h2>
-                <p class="text-gray-600">The item could not be found or an error occurred.</p>
+                <p class="text-gray-600">{{ error?.data?.statusMessage || "The item could not be found." }}</p>
                 <NuxtLink to="/" class="mt-4 inline-block text-blue-500 hover:underline">Go back home</NuxtLink>
             </div>
         </div>
@@ -142,50 +142,24 @@
 </template>
 
 <script setup>
-import qs from 'qs';
 import { ref, computed } from 'vue';
 const route = useRoute();
 const router = useRouter();
 const docId = route.params.documentId;
-const currentUser = useStrapiUser();
-const token = useStrapiToken();
+const { user: currentUser } = useAuthUser(); // Use our global auth user
 const config = useRuntimeConfig();
 
-// --- 1. Fetch the CORE ITEM DATA ---
-// This is the most important data for the page.
-const { data: itemData, pending: itemPending, error: itemError } = await useAsyncData(
-    `item-details-${docId}`,
-    async () => {
-        const query = qs.stringify({
-            filters: { documentId: { $eq: docId } },
-            populate: ['user', 'userImages', 'manufacturer', 'character', 'series', 'categories', 'itags', 'likedBy']
-        });
-        const response = await $fetch(`${config.public.strapi.url}/api/items?${query}`);
-        if (!response.data || response.data.length === 0) throw new Error('Item not found');
-        // Return the single, flattened item object.
-        return { id: response.data[0].id, ...response.data[0] };
-    }
+// --- 1. Fetch ALL page data from our single BFF endpoint ---
+const { data: pageData, pending, error, refresh } = await useAsyncData(
+    `item-page-data-${docId}`,
+    () => $fetch(`/api/items/${docId}`)
 );
 
-// --- 2. Fetch the COMMENTS separately ---
-// This fetch is not critical. If it fails, the page can still render.
-const { data: comments, refresh: refreshComments } = await useAsyncData(
-    `item-comments-${docId}`,
-    async () => {
-        const query = qs.stringify({
-            filters: { item: { documentId: { $eq: docId } } },
-            populate: { user: { populate: 'profilePicture' } },
-            sort: 'createdAt:desc'
-        });
-        const response = await $fetch(`${config.public.strapi.url}/api/comments?${query}`);
-        return (response.data || []).map(c => ({ id: c.id, ...c }));
-    }
-);
+console.log("Fetched page data:", pageData.value);
 
-// --- Combine pending/error states for the main template ---
-const pending = itemPending;
-const error = itemError;
-const item = itemData; // Use `item` directly in the template for simplicity
+// --- Computed properties to separate item and comments from the fetched data ---
+const item = computed(() => pageData.value?.item);
+const comments = computed(() => pageData.value?.comments || []);
 
 useHead({ title: () => item.value ? `${item.value.name} | Shelfie` : 'Item | Shelfie' });
 
@@ -195,7 +169,7 @@ const commentPending = ref(false);
 const newComment = ref('');
 const activeImageIndex = ref(0);
 
-// --- Computed Properties (Now referencing `item.value` directly) ---
+// --- Computed Properties for Display Logic ---
 const likeCount = computed(() => item.value?.likedBy?.length || 0);
 
 const isLiked = computed(() => {
@@ -233,38 +207,56 @@ const toggleLike = async () => {
     if (!currentUser.value) return router.push('/auth');
     likePending.value = true;
     try {
-        const currentLikes = (item.value.likedBy || []).map(u => u.id);
-        const newLikes = isLiked.value
-            ? currentLikes.filter(id => id !== currentUser.value.id)
-            : [...currentLikes, currentUser.value.id];
+        // Optimistic UI update: change the state before the API call returns
+        const originalLikedBy = [...item.value.likedBy];
+        if (isLiked.value) {
+            item.value.likedBy = item.value.likedBy.filter(u => u.id !== currentUser.value.id);
+        } else {
+            item.value.likedBy.push(currentUser.value);
+        }
 
-        // Manually update the item data after a successful like
-        const updatedItem = await $fetch(`${config.public.strapi.url}/api/items/${item.value.documentId}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token.value}` },
-            body: { data: { likedBy: newLikes } }
+        // Call the BFF endpoint
+        await $fetch('/api/items/like', {
+            method: 'POST',
+            body: {
+                itemId: item.value.documentId || item.value.id,
+                currentLikes: originalLikedBy.map(u => u.id), // Send original list
+                isLiked: !isLiked.value // Send the action we are taking (the opposite of current state)
+            }
         });
-        // Update our local state with the new data
-        item.value.likedBy = newLikes;
-    } catch (e) { console.error("Failed to toggle like:", e); }
-    finally { likePending.value = false; }
+        // No need to do anything on success, UI is already updated.
+    } catch (e) {
+        console.error("Failed to toggle like:", e);
+        // On failure, revert the optimistic UI update
+        item.value.likedBy = [...item.value.likedBy]; // This might need a deeper clone if objects are complex
+        alert('Failed to update like status.');
+    } finally {
+        likePending.value = false;
+    }
 };
 
 const postComment = async () => {
     if (!newComment.value.trim()) return;
     commentPending.value = true;
     try {
-        await $fetch(`${config.public.strapi.url}/api/comments`, {
+        await $fetch('/api/items/comment', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token.value}` },
-            body: { data: { content: newComment.value, item: item.value.documentId, user: currentUser.value.id } }
+            body: {
+                itemId: item.value.documentId || item.value.id,
+                content: newComment.value,
+            }
         });
         newComment.value = '';
-        refreshComments(); // Just refetch the comments, not the whole page
-    } catch (e) { console.error("Failed to post comment:", e); }
-    finally { commentPending.value = false; }
+        refresh(); // Refetch all page data to get the new comment
+    } catch (e) {
+        console.error("Failed to post comment:", e);
+        alert('Failed to post comment.');
+    } finally {
+        commentPending.value = false;
+    }
 };
 </script>
+
 <style scoped>
 .form-input {
     @apply w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 transition-colors;

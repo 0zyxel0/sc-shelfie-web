@@ -4,7 +4,7 @@
         <div v-if="pending" class="text-center py-20 text-gray-500">Loading item for editing...</div>
         <div v-else-if="error || !item" class="text-center py-20">
             <h2 class="text-xl font-semibold text-red-600">Could not load item</h2>
-            <p class="text-gray-500">You may not have permission to edit this item, or it does not exist.</p>
+            <p class="text-gray-500">{{ error?.data?.statusMessage || "An unknown error occurred." }}</p>
         </div>
 
         <!-- The Form -->
@@ -45,15 +45,13 @@
                     </div>
                 </div>
 
-                <!-- UPDATED: Categories now uses TagInput -->
                 <div class="mb-4">
                     <label for="categories" class="block text-gray-700 text-sm font-bold mb-2">Categories</label>
                     <TagInput v-model="form.categories" placeholder="e.g., Nendoroid, Limited" />
                 </div>
 
-                <!-- UPDATED: itags now uses TagInput -->
                 <div class="mb-4">
-                    <label for="itags" class="block text-gray-700 text-sm font-bold mb-2">itags</label>
+                    <label for="itags" class="block text-gray-700 text-sm font-bold mb-2">Tags</label>
                     <TagInput v-model="form.itags" placeholder="e.g., rare, custom paint" />
                 </div>
 
@@ -103,15 +101,13 @@
 </template>
 
 <script setup>
-import qs from 'qs';
+import { reactive, ref, watch } from 'vue';
+
 definePageMeta({ middleware: 'auth' });
 
 const route = useRoute();
 const router = useRouter();
-const token = useStrapiToken();
-const config = useRuntimeConfig();
 const docId = route.params.documentId;
-const strapiUrl = config.public.strapi.url;
 
 // Reactive state for the form
 const form = reactive({
@@ -122,31 +118,10 @@ const form = reactive({
 const loading = ref(false);
 const errorMessage = ref(null);
 
-// --- 1. Fetch data using a FILTER query ---
+// --- 1. Fetch data from our secure BFF endpoint ---
 const { data: item, pending, error } = await useAsyncData(
     `item-edit-${docId}`,
-    async () => {
-        // --- THE CRITICAL FIX IS HERE ---
-        const query = qs.stringify({
-            filters: {
-                documentId: { $eq: docId }
-            },
-            populate: ['manufacturer', 'character', 'series', 'categories', 'iitags']
-        });
-        // The URL now uses a filter instead of a path parameter
-        return await $fetch(`${strapiUrl}/api/items?${query}`, {
-            headers: { Authorization: `Bearer ${token.value}` }
-        });
-    },
-    {
-        // --- TRANSFORM MUST NOW HANDLE AN ARRAY ---
-        // A filter query always returns an array, so we take the first result.
-        transform: (response) => {
-            if (!response.data || response.data.length === 0) return null;
-            // Return the first item from the array, which is the one we want.
-            return { id: response.data[0].id, ...response.data[0] };
-        },
-    }
+    () => $fetch(`/api/items/${docId}/edit`)
 );
 
 // --- 2. Pre-fill the form once the data is fetched ---
@@ -159,70 +134,36 @@ watch(item, (newItem) => {
         form.isPrivate = newItem.isPrivate || false;
         form.purchasePrice = newItem.purchasePrice;
         form.purchaseDate = formatDateForInput(newItem.purchaseDate);
-        form.manufacturer = newItem.manufacturer?.data?.attributes.name || '';
-        form.character = newItem.character?.data?.attributes.name || '';
-        form.series = newItem.series?.data?.attributes.name || '';
+        form.manufacturer = newItem.manufacturer?.name || '';
+        form.character = newItem.character?.name || '';
+        form.series = newItem.series?.name || '';
         form.categories = (newItem.categories || []).map(c => c.name);
-        form.itags = (newItem.iitags || []).map(t => t.name);
+        form.itags = (newItem.itags || []).map(t => t.name);
     }
 }, { immediate: true });
 
 useHead({ title: () => item.value ? `Editing: ${item.value.name}` : 'Edit Item' });
-const findOrCreate = async (endpoint, name) => {
-    if (!name?.trim()) return null;
-    const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${token.value}` };
-    const query = new URLSearchParams({ 'filters[name][$eqi]': name.trim() }).toString();
-    const { data: existing } = await $fetch(`${strapiUrl}/api/${endpoint}?${query}`, { headers });
-    if (existing?.[0]) return existing[0].id;
-    const { data: created } = await $fetch(`${strapiUrl}/api/${endpoint}`, {
-        method: 'POST',
-        headers,
-        body: { data: { name: name.trim() } }
-    });
-    return created?.id;
-};
 
 // --- 3. Handle the UPDATE request ---
 const handleUpdate = async () => {
     loading.value = true;
     errorMessage.value = null;
     try {
-        const manufacturerId = await findOrCreate('manufacturers', form.manufacturer);
-        const characterId = await findOrCreate('characters', form.character);
-        const seriesId = await findOrCreate('serieses', form.series);
-
-        const categoryIds = await Promise.all(
-            form.categories.map(name => findOrCreate('categories', name))
-        );
-        const tagIds = await Promise.all(
-            form.itags.map(name => findOrCreate('iitags', name))
-        );
+        // The payload now includes the numerical `id` which the BFF endpoint needs.
         const payload = {
-            data: {
-                name: form.name,
-                itemStatus: form.itemStatus,
-                description: form.description,
-                isPrivate: form.isPrivate,
-                purchasePrice: form.purchasePrice,
-                purchaseDate: form.purchaseDate,
-                manufacturer: manufacturerId,
-                character: characterId,
-                series: seriesId,
-                categories: categoryIds.filter(id => id),
-                iitags: tagIds.filter(id => id),
-            }
+            itemId: item.value.documentId || item.value.id,
+            ...form
         };
 
-        // Use the numeric `item.id` for the PUT request endpoint
-        await $fetch(`${strapiUrl}/api/items/${docId}`, {
+        await $fetch('/api/items/update', {
             method: 'PUT',
-            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token.value}` },
             body: payload
         });
 
+        // Redirect back to the item page using the string `documentId`
         router.push(`/items/${docId}`);
     } catch (e) {
-        errorMessage.value = "Failed to update item.";
+        errorMessage.value = e.data?.statusMessage || "Failed to update item.";
         console.error(e);
     } finally {
         loading.value = false;
@@ -235,15 +176,17 @@ const handleDelete = async () => {
         loading.value = true;
         errorMessage.value = null;
         try {
-            // Use the numeric `item.id` for the DELETE request endpoint
-            await $fetch(`${strapiUrl}/api/items/${docId}`, {
+            await $fetch('/api/items/delete', {
                 method: 'DELETE',
-                headers: { Authorization: `Bearer ${token.value}` }
+                body: {
+                    // Send the numerical `id` to the BFF endpoint for deletion
+                    itemId: item.value.documentId || item.value.id
+                }
             });
             // Redirect to the personal shelf after deletion
             router.push('/my-shelf');
         } catch (e) {
-            errorMessage.value = "Failed to delete item.";
+            errorMessage.value = e.data?.statusMessage || "Failed to delete item.";
             console.error(e);
         } finally {
             loading.value = false;

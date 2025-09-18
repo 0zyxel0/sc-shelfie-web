@@ -25,7 +25,7 @@ const config = useRuntimeConfig();
 const imageUrl = computed(() => {
     // Check for the standard Strapi v4/v5 populated media structure
     if (props.item.userImages && props.item.userImages.length > 0) {
-        return `${config.public.strapi.url}${props.item.userImages[0].url}`;
+        return `${props.item.userImages[0].url}`;
     }
     return null; // Fallback if no image exists
 });

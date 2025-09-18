@@ -29,7 +29,9 @@
             </div>
 
             <!-- Content Display -->
-            <div v-if="pending" class="text-center text-gray-500">Loading connections...</div>
+            <!-- Use `userLoading` from useAuthUser for overall loading state -->
+            <div v-if="userLoading" class="text-center text-gray-500">Loading connections...</div>
+            <div v-else-if="!user" class="text-center text-gray-500">You must be logged in to view connections.</div>
 
             <div v-else>
                 <!-- Following List -->
@@ -38,7 +40,8 @@
                         <p>You aren't following anyone yet.</p>
                     </div>
                     <div v-else class="list-container">
-                        <UserListItem v-for="user in connections.following" :key="user.id" :user="user" />
+                        <!-- UserListItem is now a separate component -->
+                        <UserListItem v-for="connectionUser in connections.following" :key="connectionUser.id" :user="connectionUser" />
                     </div>
                 </div>
 
@@ -48,7 +51,8 @@
                         <p>You don't have any followers yet.</p>
                     </div>
                     <div v-else class="list-container">
-                        <UserListItem v-for="user in connections.followers" :key="user.id" :user="user" />
+                        <!-- UserListItem is now a separate component -->
+                        <UserListItem v-for="connectionUser in connections.followers" :key="connectionUser.id" :user="connectionUser" />
                     </div>
                 </div>
             </div>
@@ -57,46 +61,46 @@
 </template>
 
 <script setup>
+import { ref, computed, watch } from 'vue'; // Explicitly import Vue refs/computed/watch
+
 definePageMeta({ middleware: 'auth' });
 useHead({ title: 'My Connections | Shelfie' });
 
 const route = useRoute();
 const activeTab = ref(route.query.tab || 'following'); // Default to 'following' tab
 
-const { data: connections, pending } = await useAsyncData(
-    'connections-list',
+// --- Use your custom composable for authentication and user data ---
+const { user, isLoading: userLoading, fetchUser } = useAuthUser();
+// No need for config here, as UserListItem now handles it internally
+// const config = useRuntimeConfig();
+
+// --- Ensure user data is loaded ---
+// This will trigger the `useAuthUser().fetchUser()` if `user.value` is null,
+// ensuring `user.following` and `user.followers` are populated via the BFF endpoint.
+await useAsyncData(
+    'connections-initial-user-fetch',
     async () => {
-        const { $strapi } = useNuxtApp();
-        const user = useStrapiUser();
-
-        // Fetch the logged-in user, populating BOTH relations at once
-        const response = await $strapi.findOne('users', user.value.id, {
-            populate: {
-                following: { populate: 'profilePicture' },
-                followers: { populate: 'profilePicture' }
-            }
-        });
-
-        return {
-            following: response.following || [],
-            followers: response.followers || [],
-        };
-    }
+        if (!user.value) {
+            await fetchUser();
+        }
+    },
+    { server: true, lazy: true } // `lazy: true` means it won't block navigation if data is already there
 );
 
-// --- A reusable component for the user list item ---
-const UserListItem = {
-    props: ['user'],
-    template: `
-    <NuxtLink :to="'/users/' + user.username" class="p-4 flex items-center space-x-4 hover:bg-gray-50 transition-colors">
-      <img :src="user.profilePicture ? '${useRuntimeConfig().public.strapi.url}' + user.profilePicture.url : '/avatar-placeholder.png'" class="h-12 w-12 rounded-full object-cover">
-      <div>
-        <p class="font-bold text-gray-800">{{ user.displayName || user.username }}</p>
-        <p class="text-sm text-gray-500">@{{ user.username }}</p>
-      </div>
-    </NuxtLink>
-  `
-};
+// --- Derive connections from the global user state ---
+const connections = computed(() => ({
+    following: user.value?.following || [],
+    followers: user.value?.followers || [],
+}));
+
+// Update activeTab if route query changes
+watch(() => route.query.tab, (newTab) => {
+    if (newTab) {
+        activeTab.value = newTab;
+    }
+}, { immediate: true });
+
+// REMOVED: The inline UserListItem definition
 </script>
 
 <style scoped>
