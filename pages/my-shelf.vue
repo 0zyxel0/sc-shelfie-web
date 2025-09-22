@@ -36,7 +36,7 @@
             </div>
 
             <!-- Loading State -->
-            <div v-if="pending" class="text-center text-gray-500 py-10">
+            <div v-if="userLoading || itemsPending" class="text-center text-gray-500 py-10">
                 Loading your items...
             </div>
 
@@ -52,6 +52,7 @@
                 <div class="w-full lg:w-64 xl:w-72 flex-shrink-0">
                     <div class="sticky top-24 bg-white p-4 rounded-lg shadow-md">
                         <h3 class="text-lg font-bold text-gray-800 mb-4">Filter My Shelf</h3>
+                        <!-- Only show filters if there's more than one distinct option (including "All") -->
                         <div v-if="manufacturerOptions.length > 1 || categoryOptions.length > 1 || seriesOptions.length > 1 || tagOptions.length > 1">
                             <div class="mb-4">
                                 <label class="block text-sm font-semibold text-gray-700 mb-1">Status</label>
@@ -104,56 +105,80 @@
 </template>
 
 <script setup>
-import qs from 'qs';
+import { ref, reactive, computed, watch } from 'vue';
+import { onClickOutside } from '@vueuse/core';
 
-definePageMeta({
-    middleware: 'auth'
-});
+definePageMeta({ middleware: 'auth' });
 useHead({ title: 'My Shelf | Shelfie' });
 
-const user = useStrapiUser();
+const { user, isLoading: userLoading, fetchUser } = useAuthUser();
 const config = useRuntimeConfig();
 
-// --- NEW: State for export dropdown ---
-const isExportMenuOpen = ref(false);
-const exportMenuRef = ref(null);
-
-// --- NEW: Click-outside logic for the dropdown ---
-onMounted(() => {
-    const handler = (event) => {
-        if (exportMenuRef.value && !exportMenuRef.value.contains(event.target)) {
-            isExportMenuOpen.value = false;
-        }
-    };
-    document.addEventListener('click', handler, true);
-    onBeforeUnmount(() => {
-        document.removeEventListener('click', handler, true);
-    });
-});
-
-
-// --- The rest of your working code remains untouched ---
-const { data: items, pending } = await useAsyncData(
-    `my-shelf-all-items-${user.value?.id}`,
+await useAsyncData(
+    'my-shelf-initial-user-fetch',
     async () => {
-        if (!user.value?.id) return { data: [] };
-        const query = qs.stringify({
-            populate: ['userImages', 'manufacturer', 'character', 'series', 'categories', 'itags'],
-            filters: { user: { id: { $eq: user.value.id } } },
-            'pagination[pageSize]': 2500,
-            sort: 'createdAt:desc',
-        }, { encodeValuesOnly: true });
-        const fullUrl = `${config.public.strapi.url}/api/items?${query}`;
-        return await $fetch(fullUrl);
+        if (!user.value) {
+            await fetchUser();
+        }
+    },
+    { server: true, lazy: true }
+);
+
+const { data: items, pending: itemsPending, error: itemsError } = await useAsyncData(
+    "my-shelf-all-items",
+    async () => {
+        if (!user.value?.id) return [];
+
+        return await $fetch("/api/items", {
+            method: 'GET',
+            query: {
+                populate: {
+                    userImages: true,
+                    manufacturer: true,
+                    character: true,
+                    series: true,
+                    categories: true,
+                    itags: true,
+                },
+                filters: { user: { id: { '$eq': user.value.id } } },
+                // --- FIX: USE A NESTED OBJECT FOR PAGINATION ---
+                pagination: {
+                    pageSize: 2500,
+                },
+                sort: "createdAt:desc",
+            },
+        })
     },
     {
         transform: (response) => {
             if (!response?.data) return [];
-            return response.data.map(item => ({ id: item.id, ...item }));
-        }
+            console.log("Raw items response:", response.data);
+            return response.data.map((item) => {
+                const transformedItem = { id: item.id, ...item };
+                transformedItem.manufacturer = transformedItem.manufacturer?.name || null;
+                transformedItem.series = transformedItem.series?.name || null;
+                transformedItem.categories = transformedItem.categories?.length
+                    ? transformedItem.categories.map(cat => cat.name)
+                    : [];
+                transformedItem.itags = transformedItem.itags?.length
+                    ? transformedItem.itags.map(tag => tag.name)
+                    : [];
+                transformedItem.character = transformedItem.character?.name || null;
+                transformedItem.userImages = transformedItem.userImages?.length
+                    ? transformedItem.userImages.map(img => ({
+                        id: img.id,
+                        url: config.public.strapi.url + img.url,
+                    }))
+                    : [];
+                return transformedItem;
+            });
+        },
+        watch: [() => user.value?.id],
+        server: true,
     }
 );
 
+// --- Filter State & Logic (unchanged) ---
 const filters = reactive({
     status: 'All',
     category: 'All',
@@ -161,28 +186,39 @@ const filters = reactive({
     series: 'All',
     tag: 'All',
 });
-
-const getUniqueOptions = (key, nestedKey = 'name') => {
-    if (!items.value) return ['All'];
-    const allValues = items.value.flatMap(item => {
-        const value = item[key];
-        if (!value) return [];
-        if (Array.isArray(value)) {
-            // This handles the flattened structure: [{ id, name }, ...]
-            return value.map(v => v[nestedKey]).filter(Boolean);
-        }
-        // This handles the flattened structure: { id, name }
-        return value[nestedKey];
+const statusOptions = computed(() => {
+    const statuses = new Set(items.value?.map(item => item.itemStatus) || []);
+    return ['All', ...Array.from(statuses).sort()];
+});
+const categoryOptions = computed(() => {
+    const categories = new Set();
+    items.value?.forEach(item => item.categories.forEach(cat => categories.add(cat)));
+    return ['All', ...Array.from(categories).sort()];
+});
+const manufacturerOptions = computed(() => {
+    const manufacturers = new Set(items.value?.map(item => item.manufacturer).filter(Boolean) || []);
+    return ['All', ...Array.from(manufacturers).sort()];
+});
+const seriesOptions = computed(() => {
+    const seriesList = new Set(items.value?.map(item => item.series).filter(Boolean) || []);
+    return ['All', ...Array.from(seriesList).sort()];
+});
+const tagOptions = computed(() => {
+    const tags = new Set();
+    items.value?.forEach(item => item.itags.forEach(tag => tags.add(tag)));
+    return ['All', ...Array.from(tags).sort()];
+});
+const filteredItems = computed(() => {
+    if (!items.value) return [];
+    return items.value.filter(item => {
+        const matchesStatus = filters.status === 'All' || item.itemStatus === filters.status;
+        const matchesCategory = filters.category === 'All' || item.categories.includes(filters.category);
+        const matchesManufacturer = filters.manufacturer === 'All' || item.manufacturer === filters.manufacturer;
+        const matchesSeries = filters.series === 'All' || item.series === filters.series;
+        const matchesTag = filters.tag === 'All' || item.itags.includes(filters.tag);
+        return matchesStatus && matchesCategory && matchesManufacturer && matchesSeries && matchesTag;
     });
-    return ['All', ...new Set(allValues.filter(Boolean))].sort();
-};
-
-const statusOptions = computed(() => ['All', 'Owned', 'Wishlist', 'Pre-ordered', 'For Sale']);
-const categoryOptions = computed(() => getUniqueOptions('categories'));
-const manufacturerOptions = computed(() => getUniqueOptions('manufacturer'));
-const seriesOptions = computed(() => getUniqueOptions('series'));
-const tagOptions = computed(() => getUniqueOptions('itags'));
-
+});
 const resetFilters = () => {
     filters.status = 'All';
     filters.category = 'All';
@@ -191,27 +227,17 @@ const resetFilters = () => {
     filters.tag = 'All';
 };
 
-// --- UPDATED: filteredItems with corrected transform logic ---
-const filteredItems = computed(() => {
-    if (!items.value) return [];
-    return items.value.filter(item => {
-        const statusMatch = filters.status === 'All' || item.itemStatus === filters.status;
-        const categoryMatch = filters.category === 'All' || (item.categories && item.categories.some(c => c.name === filters.category));
-        const manufacturerMatch = filters.manufacturer === 'All' || (item.manufacturer && item.manufacturer.name === filters.manufacturer);
-        const seriesMatch = filters.series === 'All' || (item.series && item.series.name === filters.series);
-        const tagMatch = filters.tag === 'All' || (item.itags && item.itags.some(t => t.name === filters.tag));
-        return statusMatch && categoryMatch && manufacturerMatch && seriesMatch && tagMatch;
-    });
+// --- Export Dropdown Logic (unchanged) ---
+const isExportMenuOpen = ref(false);
+const exportMenuRef = ref(null);
+onClickOutside(exportMenuRef, () => {
+    isExportMenuOpen.value = false;
 });
-// --- UPDATED EXPORT FUNCTIONS ---
 
+// --- CLIENT-SIDE EXPORT FUNCTIONS (unchanged) ---
 const exportToCSV = async () => {
-    // Guard to ensure this only runs in the browser
     if (process.server) return;
-
-    // --- DYNAMIC, CLIENT-SIDE IMPORT ---
     const Papa = await import('papaparse').then(m => m.default || m);
-
     if (filteredItems.value.length === 0) {
         alert("No items to export.");
         return;
@@ -219,12 +245,12 @@ const exportToCSV = async () => {
     const dataForExport = filteredItems.value.map(item => ({
         Name: item.name,
         Status: item.itemStatus,
-        Manufacturer: item.manufacturer?.data?.attributes.name || 'N/A',
-        Series: item.series?.data?.attributes.name || 'N/A',
-        Character: item.character?.data?.attributes.name || 'N/A',
+        Manufacturer: item.manufacturer || 'N/A',
+        Series: item.series || 'N/A',
+        Character: item.character || 'N/A',
         PurchasePrice: item.purchasePrice || 0,
         PurchaseDate: item.purchaseDate ? new Date(item.purchaseDate).toLocaleDateString() : 'N/A',
-        itags: (item.itags?.data || []).map(t => t.attributes.name).join(' | '),
+        itags: item.itags.join(' | '),
     }));
     const csv = Papa.unparse(dataForExport);
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
@@ -237,13 +263,9 @@ const exportToCSV = async () => {
 };
 
 const exportToPDF = async () => {
-    // Guard to ensure this only runs in the browser
     if (process.server) return;
-
-    // --- DYNAMIC, CLIENT-SIDE IMPORTS ---
     const { default: jsPDF } = await import('jspdf');
     const { default: autoTable } = await import('jspdf-autotable');
-
     if (filteredItems.value.length === 0) {
         alert("No items to export.");
         return;
@@ -259,11 +281,10 @@ const exportToPDF = async () => {
     const tableRows = filteredItems.value.map(item => [
         item.name,
         item.itemStatus,
-        item.manufacturer?.data?.attributes.name || '-',
-        item.series?.data?.attributes.name || '-',
+        item.manufacturer || '-',
+        item.series || '-',
         item.purchasePrice ? `$${item.purchasePrice}` : '-',
     ]);
-
     autoTable(doc, {
         head: [tableColumn],
         body: tableRows,
@@ -279,6 +300,6 @@ const exportToPDF = async () => {
 
 <style scoped>
 .filter-select {
-    @apply w-full border-gray-300 rounded-md shadow-sm text-sm focus:ring-blue-500 focus:border-blue-500 mb-4;
+    @apply w-full border-gray-300 rounded-md shadow-sm text-sm focus:ring-blue-500 focus:border-blue-500;
 }
 </style>

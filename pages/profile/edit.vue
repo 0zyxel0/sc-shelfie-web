@@ -1,8 +1,8 @@
 <template>
   <div class="bg-gray-100 min-h-screen">
     <!-- Loading and Error States -->
-    <div v-if="pending" class="text-center py-20 text-gray-500">Loading your profile for editing...</div>
-    <div v-else-if="error || !profileData" class="text-center py-20">
+    <div v-if="pending || userLoading" class="text-center py-20 text-gray-500">Loading your profile for editing...</div>
+    <div v-else-if="error || !user" class="text-center py-20">
       <h2 class="text-xl font-semibold text-red-600">Could not load your profile</h2>
       <p class="text-gray-500">Please try logging in again.</p>
     </div>
@@ -49,17 +49,20 @@
               <!-- Username (Read-only) -->
               <div class="mt-6">
                 <label for="username" class="block text-sm font-medium text-gray-700">Username</label>
-                <input type="text" id="username" :value="profileData.username" disabled class="form-input mt-1 bg-gray-100 cursor-not-allowed">
+                <!-- Use `user.username` from the global user state -->
+                <input type="text" id="username" :value="user.username" disabled class="form-input mt-1 bg-gray-100 cursor-not-allowed">
               </div>
 
               <!-- Email & Verification Status -->
               <div class="mt-6">
                 <label for="email" class="block text-sm font-medium text-gray-700">Email address</label>
-                <input type="email" id="email" :value="profileData.email" disabled class="form-input mt-1 bg-gray-100 cursor-not-allowed">
+                <!-- Use `user.email` from the global user state -->
+                <input type="email" id="email" :value="user.email" disabled class="form-input mt-1 bg-gray-100 cursor-not-allowed">
 
-                <div v-if="!profileData.emailVerified" class="mt-2 text-sm text-yellow-800 bg-yellow-100 p-3 rounded-md">
+                <div v-if="!user.emailVerified" class="mt-2 text-sm text-yellow-800 bg-yellow-100 p-3 rounded-md">
                   Your email is not verified.
-                  <button type="button" class="font-medium underline hover:text-yellow-900">Resend verification email</button>
+                  <!-- Re-using `resendEmail` from useAuthUser or define locally if it has specific logic -->
+                  <button type="button" @click="handleResendEmail" class="font-medium underline hover:text-yellow-900">Resend verification email</button>
                 </div>
               </div>
 
@@ -67,7 +70,7 @@
               <div class="mt-6">
                 <label for="birthDate" class="block text-sm font-medium text-gray-700">Birth Date</label>
                 <input v-model="form.birthDate" type="date" id="birthDate" required class="form-input mt-1">
-                <p class="mt-1 text-xs text-gray-500">Used for age verification. You must be at least 18 years old to view NSFW contents.</p>
+                <p class="mt-1 text-xs text-gray-500">Used for age verification. You must be at least 13 years old to use this service.</p>
                 <p v-if="ageError" class="text-xs text-red-600 mt-1">{{ ageError }}</p>
               </div>
 
@@ -88,27 +91,33 @@
 </template>
 
 <script setup>
-import qs from 'qs';
+// REMOVE: `qs` is now used on the server
+// import qs from 'qs';
 
 definePageMeta({ middleware: 'auth' });
 useHead({ title: 'Account Settings | Shelfie' });
 
-const { fetchUser } = useStrapiAuth();
-const token = useStrapiToken();
-const config = useRuntimeConfig();
+// Use your custom composable for auth state
+const { user, isLoading: userLoading, fetchUser } = useAuthUser();
 const router = useRouter();
+const config = useRuntimeConfig();
 
 // --- 1. Fetch FRESH user data for this page ---
-const { data: profileData, pending, error } = await useAsyncData(
+// We'll use useAsyncData to trigger the `fetchUser` from useAuthUser.
+// This ensures the global user state (`user` from useAuthUser) is fresh.
+const { pending, error } = await useAsyncData(
   'profile-edit-data',
   async () => {
-    if (!token.value) return null;
-    const query = qs.stringify({ populate: 'profilePicture' });
-    return await $fetch(`${config.public.strapi.url}/api/users/me?${query}`, {
-      headers: { Authorization: `Bearer ${token.value}` },
-    });
-  }
+    // If user is not yet populated (e.g., direct navigation or refresh), fetch it.
+    // The `fetchUser` from `useAuthUser` already calls `/api/profile/me`.
+    // We can also pass populate options here directly if needed by the specific API route.
+    if (!user.value) {
+      await fetchUser(); // This will use the /api/profile/me BFF endpoint
+    }
+  },
+  { server: true } // Ensure this runs on both client and server for SSR
 );
+
 
 // --- 2. Initialize form state ---
 const form = reactive({
@@ -122,16 +131,18 @@ const errorMessage = ref(null);
 const ageError = ref(null);
 
 // --- 3. Pre-fill the form once the fresh data is available ---
-watch(profileData, (freshUser) => {
+// Watch `user.value` from `useAuthUser` instead of `profileData`
+watch(user, (freshUser) => {
   if (freshUser) {
     form.displayName = freshUser.displayName || '';
     form.birthDate = freshUser.birthDate ? new Date(freshUser.birthDate).toISOString().split('T')[0] : '';
 
-    if (freshUser.profilePicture?.url) {
-      imagePreviewUrl.value = config.public.strapi.url + freshUser.profilePicture.url;
+    // Adjust for Strapi v4 nested structure: `profilePicture.data.attributes.url`
+    if (freshUser.profilePicture?.data?.attributes?.url) {
+      imagePreviewUrl.value = config.public.strapi.url + freshUser.profilePicture.data.attributes.url;
     }
   }
-}, { immediate: true }); // `immediate: true` runs the watcher as soon as the data is available
+}, { immediate: true });
 
 // --- 4. Age Verification Logic ---
 watch(() => form.birthDate, (newDate) => {
@@ -147,12 +158,12 @@ watch(() => form.birthDate, (newDate) => {
     age--;
   }
 
-  if (age < 13) {
+  if (age < 13) { // Changed from 18 to 13 as per comment in template
     ageError.value = 'You must be at least 13 years old to use this service.';
   } else {
     ageError.value = null;
   }
-});
+}, { immediate: true }); // Also run on initial load
 
 // --- 5. Event Handlers and Submission Logic ---
 const onFileChange = (e) => {
@@ -168,10 +179,13 @@ const handleUpdate = async () => {
     errorMessage.value = "Please correct the errors before saving.";
     return;
   }
+  if (!user.value?.id) { // Ensure user ID is available
+    errorMessage.value = "User not logged in or ID missing.";
+    return;
+  }
 
   loading.value = true;
   errorMessage.value = null;
-  const strapiUrl = config.public.strapi.url;
 
   try {
     const payload = {
@@ -181,29 +195,46 @@ const handleUpdate = async () => {
 
     if (profilePictureFile.value) {
       const formData = new FormData();
-      formData.append('files', profilePictureFile.value);
-      const [uploadedFile] = await $fetch(`${strapiUrl}/api/upload`, {
+      formData.append('files', profilePictureFile.value); // 'files' is Strapi's default field name for uploads
+      // Call your BFF upload endpoint
+      const [uploadedFile] = await $fetch('/api/upload', {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token.value}` },
-        body: formData,
+        body: formData, // $fetch handles Content-Type for FormData
       });
-      payload.profilePicture = uploadedFile.id;
+      payload.profilePicture = uploadedFile.id; // Strapi expects the ID of the uploaded file
     }
 
-    await $fetch(`${strapiUrl}/api/users/${profileData.value.id}`, {
+    // Call your BFF update endpoint
+    await $fetch('/api/profile/update', {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token.value}` },
-      body: JSON.stringify(payload),
+      // No need for 'Content-Type': 'application/json' here, $fetch adds it for plain objects
+      body: payload, // Send the payload object
     });
 
-    await fetchUser(); // This updates the global state for other pages
+    await fetchUser(); // IMPORTANT: Re-fetch the global user state to get updated profile data
     router.push('/profile');
 
   } catch (e) {
-    errorMessage.value = "Failed to update profile. Please try again.";
+    errorMessage.value = e.data?.statusMessage || "Failed to update profile. Please try again.";
     console.error("Profile update error:", e);
   } finally {
     loading.value = false;
+  }
+};
+
+const handleResendEmail = async () => {
+  // You can either create a local resendStatus ref and logic similar to `auth.vue`
+  // or use a resendEmail function if you add one to your `useAuthUser` composable.
+  // For now, let's keep it simple and directly call the BFF route here:
+  try {
+    // Calling the BFF endpoint directly
+    await $fetch('/api/profile/resend-verification-email', {
+      method: 'POST',
+    });
+    alert('A new verification email has been sent!');
+  } catch (e) {
+    alert(e.data?.statusMessage || 'Failed to send verification email. Please try again later.');
+    console.error("Resend verification email error:", e);
   }
 };
 </script>

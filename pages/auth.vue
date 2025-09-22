@@ -62,42 +62,33 @@
 </template>
 
 <script setup>
-definePageMeta({ layout: false });
-const { login, register } = useStrapiAuth();
-const user = useStrapiUser(); // <-- Get the reactive user state
-const router = useRouter();
+definePageMeta({ layout: false })
+const router = useRouter()
 
-const username = ref('');
-const email = ref('');
-const password = ref('');
-const isRegisterMode = ref(false);
-const errorMessage = ref(null);
+const username = ref('')
+const email = ref('')
+const password = ref('')
+const isRegisterMode = ref(false)
+const errorMessage = ref(null)
 
 const handleAuth = async () => {
-    errorMessage.value = null;
+    errorMessage.value = null
     try {
         if (isRegisterMode.value) {
-            // REGISTER: After registering, still go to edit profile first! This is good onboarding.
-            await register({
-                username: username.value,
-                email: email.value,
-                password: password.value
-            });
-            router.push('/profile/edit');
-
+            await $fetch('/api/auth/register', {
+                method: 'POST',
+                body: { username: username.value, email: email.value, password: password.value },
+            })
+            router.push('/profile/edit')
         } else {
-            // LOGIN
-            await login({
-                identifier: email.value,
-                password: password.value
-            });
-
-            // After a successful login, always go to the new homepage.
-            router.push('/my-shelf');
+            await $fetch('/api/auth/login', {
+                method: 'POST',
+                body: { email: email.value, password: password.value },
+            })
+            router.push('/my-shelf')
         }
     } catch (e) {
-        errorMessage.value = e.response?._data?.error?.message || 'An unexpected error occurred.';
-        console.error("Authentication error:", e);
+        errorMessage.value = e.data?.statusMessage || 'An unexpected error occurred.'
     }
-};
+}
 </script>

@@ -53,7 +53,7 @@
               </button>
               <div v-if="isMenuOpen" class="absolute top-16 right-4 w-48 bg-white rounded-md shadow-lg ring-1 ring-black ring-opacity-5 z-50">
                 <div class="py-1">
-                  <NuxtLink to="/feed" @click="isMenuOpen = false" class="block ...">Feed</NuxtLink>
+                  <NuxtLink to="/feed" @click="isMenuOpen = false" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Feed</NuxtLink>
                   <NuxtLink to="/my-shelf" @click="isMenuOpen = false" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">My Shelf</NuxtLink>
                   <NuxtLink to="/calendar" @click="isMenuOpen = false" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Calendar</NuxtLink>
                   <NuxtLink to="/profile" @click="isMenuOpen = false" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Profile</NuxtLink>
@@ -81,19 +81,36 @@
 </template>
 
 <script setup>
-const user = useStrapiUser();
+import { ref, computed } from 'vue'; // Explicitly import from 'vue'
+
 const isMenuOpen = ref(false);
 const searchQuery = ref('');
 const router = useRouter();
 
+// --- Use our consistent, global authentication composable ---
+const { user, fetchUser } = useAuthUser();
+
+// --- This `useAsyncData` ensures the user state is populated on initial load ---
+// It's a robust pattern to ensure `user` is available for both SSR and client-side navigation.
+await useAsyncData('header-user-fetch', async () => {
+  // Only fetch if the user state isn't already populated.
+  if (!user.value) {
+    // We now call our BFF endpoint for fetching the user, which gracefully handles null (logged out).
+    // It's crucial to RETURN the value here to avoid the SSR warning.
+    return await fetchUser();
+  }
+  // If the user is already loaded, just return the existing value.
+  return user.value;
+});
+
+// --- Computed: Premium check ---
+// Note: Ensure your `/api/auth/me.get.ts` populates the `role` field from Strapi.
+const isPremiumUser = computed(() => user.value?.role?.name === 'Premium');
+
+// --- Search ---
 const performSearch = () => {
   if (searchQuery.value.trim()) {
-    router.push(`/search?q=${searchQuery.value.trim()}`);
+    router.push(`/search?q=${encodeURIComponent(searchQuery.value.trim())}`);
   }
 };
-
-
-const isPremiumUser = computed(() => {
-  return user.value?.role?.name === 'Premium';
-});
 </script>

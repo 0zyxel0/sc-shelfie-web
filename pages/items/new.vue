@@ -10,7 +10,7 @@
                     <input v-model="form.name" type="text" id="name" required class="form-input">
                 </div>
 
-                <!-- Status (Updated v-model to form.itemStatus) -->
+                <!-- Status -->
                 <div class="mb-4">
                     <label for="status" class="block text-gray-700 text-sm font-bold mb-2">Status *</label>
                     <select v-model="form.itemStatus" id="status" required class="form-input">
@@ -58,27 +58,26 @@
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-4 mb-4">
                     <div>
                         <label for="manufacturer" class="block text-gray-700 text-sm font-bold mb-2">Manufacturer</label>
-                        <input v-model="tempManufacturer" id="manufacturer" type="text" placeholder="e.g., Good Smile Company" class="form-input">
+                        <input v-model="form.manufacturer" id="manufacturer" type="text" placeholder="e.g., Good Smile Company" class="form-input">
                     </div>
                     <div>
                         <label for="character" class="block text-gray-700 text-sm font-bold mb-2">Character</label>
-                        <input v-model="tempCharacter" id="character" type="text" placeholder="e.g., Hatsune Miku" class="form-input">
+                        <input v-model="form.character" id="character" type="text" placeholder="e.g., Hatsune Miku" class="form-input">
                     </div>
                     <div>
                         <label for="series" class="block text-gray-700 text-sm font-bold mb-2">Series</label>
-                        <input v-model="tempSeries" id="series" type="text" placeholder="e.g., Vocaloid" class="form-input">
+                        <input v-model="form.series" id="series" type="text" placeholder="e.g., Vocaloid" class="form-input">
                     </div>
                 </div>
-                <!-- === NEW: Tag Field === -->
+
                 <div class="mb-4">
                     <label for="categories" class="block text-gray-700 text-sm font-bold mb-2">Categories</label>
-                    <TagInput v-model="categoriesArray" placeholder="e.g., Nendoroid, Limited" />
+                    <TagInput v-model="form.categories" placeholder="e.g., Nendoroid, Limited" />
                 </div>
 
-                <!-- UPDATED: Tags now uses TagInput -->
                 <div class="mb-4">
                     <label for="tags" class="block text-gray-700 text-sm font-bold mb-2">Tags</label>
-                    <TagInput v-model="tagsArray" placeholder="e.g., rare, custom paint" />
+                    <TagInput v-model="form.tags" placeholder="e.g., rare, custom paint" />
                 </div>
 
                 <!-- Purchase Price & Date -->
@@ -126,15 +125,12 @@
 </template>
 
 <script setup>
+import { reactive, ref } from 'vue';
+
 definePageMeta({ middleware: 'auth' });
 useHead({ title: 'Add New Item | Shelfie' });
-import qs from 'qs'; // Make sure qs is imported
 
-const token = useStrapiToken();
-const config = useRuntimeConfig();
 const router = useRouter();
-const currentUser = useStrapiUser();
-const strapiUrl = config.public.strapi.url;
 
 const form = reactive({
     name: '',
@@ -142,21 +138,18 @@ const form = reactive({
     description: '',
     purchasePrice: null,
     purchaseDate: null,
-    files: [],
+    files: [], // To hold the actual file objects
     isPrivate: false,
+    manufacturer: '',
+    character: '',
+    series: '',
+    categories: [], // Now directly part of the form
+    tags: [],       // Now directly part of the form
 });
 
 const imagePreviews = ref([]);
-const tempManufacturer = ref('');
-const tempCharacter = ref('');
-const tempSeries = ref('');
-const tempCategories = ref('');
 const loading = ref(false);
 const errorMessage = ref(null);
-const categoriesArray = ref([]);
-const tagsArray = ref([]);
-
-let isSubmitting = false;
 
 const handleFileChange = (e) => {
     const newFiles = Array.from(e.target.files);
@@ -172,116 +165,50 @@ const removeImage = (index) => {
     form.files.splice(index, 1);
 };
 
-const findOrCreate = async (endpoint, name) => {
-    if (!name?.trim()) return null;
-
-    const headers = {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token.value}`
-    };
-
-    // Use `qs` to correctly format the filter query string
-    const query = qs.stringify({
-        filters: {
-            name: {
-                $eqi: name.trim() // `$eqi` for case-insensitive search
-            }
-        }
-    }, { encodeValuesOnly: true });
-
-    const { data: existing } = await $fetch(`${strapiUrl}/api/${endpoint}?${query}`, { headers });
-
-    if (existing?.[0]) {
-        // Return the numeric ID from the response
-        return existing[0].id;
-    }
-
-    // If not found, create it
-    const { data: created } = await $fetch(`${strapiUrl}/api/${endpoint}`, {
-        method: 'POST',
-        headers,
-        body: { data: { name: name.trim() } }
-    });
-    // Return the numeric ID from the new entry
-    return created?.id;
-};
-
 const handleSubmit = async () => {
-    if (isSubmitting) {
-        console.warn("Submission blocked: a request is already in progress.");
-        return;
-    }
-    isSubmitting = true;
     loading.value = true;
     errorMessage.value = null;
 
     try {
-        let imageIds = [];
-        if (form.files.length > 0) {
-            const formData = new FormData();
-            form.files.forEach(file => formData.append('files', file));
-            const uploadedFiles = await $fetch(`${strapiUrl}/api/upload`, {
-                method: 'POST',
-                headers: { Authorization: `Bearer ${token.value}` },
-                body: formData,
-            });
-            imageIds = uploadedFiles.map(file => file.id);
-        }
+        // Use FormData to send both files and text data
+        const formData = new FormData();
 
-        const manufacturerId = await findOrCreate('manufacturers', tempManufacturer.value);
-        const characterId = await findOrCreate('characters', tempCharacter.value);
-        const seriesId = await findOrCreate('serieses', tempSeries.value);
-        const categoryIds = await Promise.all(
-            categoriesArray.value.map(name => findOrCreate('categories', name))
-        );
-        const tagIds = await Promise.all(
-            tagsArray.value.map(name => findOrCreate('itags', name))
-        );
+        // Append all text fields
+        formData.append('name', form.name);
+        formData.append('itemStatus', form.itemStatus);
+        formData.append('description', form.description || '');
+        if (form.purchasePrice !== null) formData.append('purchasePrice', form.purchasePrice);
+        if (form.purchaseDate) formData.append('purchaseDate', form.purchaseDate);
+        formData.append('isPrivate', form.isPrivate);
+        formData.append('manufacturer', form.manufacturer || '');
+        formData.append('character', form.character || '');
+        formData.append('series', form.series || '');
+        // Join arrays into comma-separated strings for the server
+        formData.append('categories', form.categories.join(','));
+        formData.append('tags', form.tags.join(','));
 
-        const payload = {
-            data: {
-                name: form.name,
-                user: currentUser.value.id,
-                itemStatus: form.itemStatus,
-                description: form.description,
-                purchasePrice: form.purchasePrice,
-                purchaseDate: form.purchaseDate,
-                isPrivate: form.isPrivate,
-                userImages: imageIds,
-                manufacturer: manufacturerId,
-                character: characterId,
-                series: seriesId,
-                categories: categoryIds.filter(id => id),
-                itags: tagIds.filter(id => id),
-            }
-        };
-
-        // --- KEY CHANGE HERE ---
-        // We will now call the raw response to inspect it fully.
-        const response = await $fetch.raw(`${strapiUrl}/api/items`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token.value}` },
-            body: payload,
+        // Append all file objects
+        form.files.forEach((file, index) => {
+            formData.append(`file_${index}`, file); // Give each file a unique name
         });
 
-        const responseData = response._data;
-        console.log("Full Strapi Response:", responseData);
+        // Make a single call to our BFF orchestration endpoint
+        const createdItem = await $fetch('/api/items/create', {
+            method: 'POST',
+            body: formData, // $fetch handles multipart/form-data encoding
+        });
 
-        // Explicitly look for `documentId` first, then fall back to `id`.
-        const finalDocumentId = responseData.data?.documentId || responseData.data?.id;
-
-        if (!finalDocumentId) {
-            throw new Error("Could not find 'documentId' or 'id' in the API response.");
+        // The BFF endpoint returns the new item's ID
+        if (createdItem.id) {
+            router.push(`/items/${createdItem.documentId || createdItem.id}`);
+        } else {
+            throw new Error("Could not find item ID in the API response.");
         }
 
-        console.log('✅ SUCCESS: Using Document ID for redirection:', finalDocumentId);
-        router.push(`/items/${finalDocumentId}`);
-
     } catch (e) {
-        console.error('❌ ERROR: Submission failed.', e.response?._data || e.data || e);
-        errorMessage.value = e.response?._data?.error?.message || e.message || "An error occurred.";
+        console.error('❌ ERROR: Submission failed.', e.data || e);
+        errorMessage.value = e.data?.statusMessage || e.message || "An error occurred.";
     } finally {
-        isSubmitting = false;
         loading.value = false;
     }
 };
