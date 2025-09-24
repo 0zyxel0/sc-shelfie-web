@@ -19,17 +19,28 @@
                     </NuxtLink>
 
                     <!-- === NEW: Export Dropdown === -->
-                    <div class="relative" ref="exportMenuRef">
-                        <button @click="isExportMenuOpen = !isExportMenuOpen" class="flex items-center justify-center bg-white border border-gray-300 hover:bg-gray-100 text-gray-700 font-bold py-3 px-4 rounded-lg transition-colors">
+                    <div class="relative" ref="exportMenuRef" @mouseenter="showPremiumHint = !isPremiumUser" @mouseleave="showPremiumHint = false">
+                        <button @click="isExportMenuOpen = !isExportMenuOpen" :disabled="!isPremiumUser" class="flex items-center justify-center bg-white border border-gray-300 hover:bg-gray-100 text-gray-700 font-bold py-3 px-4 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
                             </svg>
                         </button>
-                        <div v-if="isExportMenuOpen" class="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-xl z-20">
+
+                        <!-- Export Dropdown for Premium Users -->
+                        <div v-if="isExportMenuOpen && isPremiumUser" class="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-xl z-20">
                             <div class="py-1">
                                 <a href="#" @click.prevent="exportToCSV" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Export as CSV</a>
                                 <a href="#" @click.prevent="exportToPDF" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Export as PDF</a>
                             </div>
+                        </div>
+
+                        <!-- Premium Hint/Tooltip for Free Users -->
+                        <div v-if="showPremiumHint" class="absolute right-0 mt-2 w-64 bg-gray-800 text-white rounded-md shadow-xl z-20 p-4">
+                            <h4 class="font-bold text-md">Premium Feature</h4>
+                            <p class="text-sm mt-1">Export your collection to CSV or PDF with a Premium subscription.</p>
+                            <NuxtLink to="/go-premium" class="mt-3 inline-block bg-yellow-500 hover:bg-yellow-600 text-gray-900 font-bold py-2 px-4 rounded-lg text-sm">
+                                Go Premium
+                            </NuxtLink>
                         </div>
                     </div>
                 </div>
@@ -112,6 +123,8 @@ definePageMeta({ middleware: 'auth' });
 useHead({ title: 'My Shelf | Shelfie' });
 
 const { user, isLoading: userLoading, fetchUser } = useAuthUser();
+
+const isPremiumUser = computed(() => user.value?.subscriptionType === 'Premium');
 const config = useRuntimeConfig();
 
 await useAsyncData(
@@ -229,14 +242,20 @@ const resetFilters = () => {
 
 // --- Export Dropdown Logic (unchanged) ---
 const isExportMenuOpen = ref(false);
+const showPremiumHint = ref(false);
 const exportMenuRef = ref(null);
 onClickOutside(exportMenuRef, () => {
     isExportMenuOpen.value = false;
+    const showPremiumHint = ref(false);
 });
 
 // --- CLIENT-SIDE EXPORT FUNCTIONS (unchanged) ---
 const exportToCSV = async () => {
     if (process.server) return;
+    if (!isPremiumUser.value) {
+        alert("This is a premium feature.");
+        return;
+    }
     const Papa = await import('papaparse').then(m => m.default || m);
     if (filteredItems.value.length === 0) {
         alert("No items to export.");
@@ -264,6 +283,10 @@ const exportToCSV = async () => {
 
 const exportToPDF = async () => {
     if (process.server) return;
+    if (!isPremiumUser.value) {
+        alert("This is a premium feature.");
+        return;
+    }
     const { default: jsPDF } = await import('jspdf');
     const { default: autoTable } = await import('jspdf-autotable');
     if (filteredItems.value.length === 0) {

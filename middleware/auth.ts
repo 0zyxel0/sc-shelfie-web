@@ -11,6 +11,11 @@ export default defineNuxtRouteMiddleware(async (to, from) => {
   if (!user.value && !isLoading.value) {
     await fetchUser(); // Attempt to fetch user data from the BFF endpoint
   }
+  
+   const allowedRoutes = ['/premium/success', '/premium/cancelled'];
+  if (allowedRoutes.includes(to.path)) {
+    return; // Do not redirect, let the page handle its logic.
+  }
 
   // After attempting to fetch, check if a user is available
   if (!user.value) {
