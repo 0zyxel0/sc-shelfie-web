@@ -31,7 +31,9 @@ export default defineNuxtConfig({
     }
   },
   runtimeConfig: {
+    paymongoSecretKey: process.env.PAYMONGO_SECRET_KEY,
     public: {
+      paymongoPublicKey: process.env.PAYMONGO_PUBLIC_KEY,
       strapi: {
         url: process.env.STRAPI_URL || "http://localhost:1337",
       },

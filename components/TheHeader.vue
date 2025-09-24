@@ -1,9 +1,9 @@
+// /components/TheHeader.vue (Full, Corrected Code)
+
 <template>
   <header class="bg-white shadow-sm sticky top-0 z-40">
     <div class="container mx-auto px-4 sm:px-6 lg:px-8">
       <div class="flex justify-between items-center h-16">
-
-        <!-- Left Side: Logo/Brand Name, always links to Home -->
         <NuxtLink to="/" class="text-2xl font-bold text-gray-800 tracking-tighter">
           Shelfie
         </NuxtLink>
@@ -21,12 +21,8 @@
           </form>
         </div>
 
-        <!-- Right Side: Navigation & Actions -->
         <div class="flex items-center space-x-2 md:space-x-6">
-
-          <!-- === AUTHENTICATED USER VIEW === -->
           <template v-if="user">
-            <!-- Desktop Navigation -->
             <nav class="hidden md:flex items-center space-x-6 text-sm font-medium text-gray-600">
               <NuxtLink to="/feed" class="hover:text-blue-500" active-class="text-blue-600 font-semibold">Feed</NuxtLink>
               <NuxtLink to="/my-shelf" class="hover:text-blue-500" active-class="text-blue-600 font-semibold">My Shelf</NuxtLink>
@@ -34,17 +30,15 @@
               <NuxtLink to="/profile" class="hover:text-blue-500" active-class="text-blue-600 font-semibold">Profile</NuxtLink>
             </nav>
 
-            <!-- Go Premium Button (for non-premium users) -->
+            <!-- --- FIX: Hide button if user is already premium --- -->
             <NuxtLink v-if="!isPremiumUser" to="/go-premium" class="hidden sm:block bg-gradient-to-r from-yellow-400 to-orange-500 hover:from-yellow-500 hover:to-orange-600 text-white font-semibold py-2 px-4 rounded-full transition-all text-sm shadow">
               Go Premium
             </NuxtLink>
 
-            <!-- Add Item Button -->
             <NuxtLink to="/items/new" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-full transition-colors duration-300 text-sm">
               + Add Item
             </NuxtLink>
 
-            <!-- Mobile Menu (for logged-in users) -->
             <div class="md:hidden">
               <button @click="isMenuOpen = !isMenuOpen" class="p-2 rounded-md text-gray-500 hover:bg-gray-100">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -57,6 +51,7 @@
                   <NuxtLink to="/my-shelf" @click="isMenuOpen = false" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">My Shelf</NuxtLink>
                   <NuxtLink to="/calendar" @click="isMenuOpen = false" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Calendar</NuxtLink>
                   <NuxtLink to="/profile" @click="isMenuOpen = false" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Profile</NuxtLink>
+                  <!-- --- FIX: Hide mobile link if user is already premium --- -->
                   <div v-if="!isPremiumUser" class="border-t my-1">
                     <NuxtLink to="/go-premium" @click="isMenuOpen = false" class="block px-4 py-2 text-sm text-yellow-600 font-semibold hover:bg-gray-100">Go Premium</NuxtLink>
                   </div>
@@ -65,7 +60,6 @@
             </div>
           </template>
 
-          <!-- === GUEST (LOGGED-OUT) USER VIEW === -->
           <template v-else>
             <div class="flex items-center space-x-2">
               <NuxtLink to="/auth" class="bg-blue-600 hover:bg-blue-500 text-white font-semibold py-2 px-4 rounded-full transition-colors text-sm">
@@ -73,7 +67,6 @@
               </NuxtLink>
             </div>
           </template>
-
         </div>
       </div>
     </div>
@@ -81,33 +74,24 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'; // Explicitly import from 'vue'
+import { ref, computed } from 'vue';
 
 const isMenuOpen = ref(false);
 const searchQuery = ref('');
 const router = useRouter();
 
-// --- Use our consistent, global authentication composable ---
 const { user, fetchUser } = useAuthUser();
 
-// --- This `useAsyncData` ensures the user state is populated on initial load ---
-// It's a robust pattern to ensure `user` is available for both SSR and client-side navigation.
 await useAsyncData('header-user-fetch', async () => {
-  // Only fetch if the user state isn't already populated.
   if (!user.value) {
-    // We now call our BFF endpoint for fetching the user, which gracefully handles null (logged out).
-    // It's crucial to RETURN the value here to avoid the SSR warning.
     return await fetchUser();
   }
-  // If the user is already loaded, just return the existing value.
   return user.value;
 });
 
-// --- Computed: Premium check ---
-// Note: Ensure your `/api/auth/me.get.ts` populates the `role` field from Strapi.
-const isPremiumUser = computed(() => user.value?.role?.name === 'Premium');
+// --- FIX: Computed property now checks the `subscriptionType` field ---
+const isPremiumUser = computed(() => user.value?.subscriptionType === 'Premium');
 
-// --- Search ---
 const performSearch = () => {
   if (searchQuery.value.trim()) {
     router.push(`/search?q=${encodeURIComponent(searchQuery.value.trim())}`);

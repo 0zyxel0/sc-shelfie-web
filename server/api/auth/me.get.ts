@@ -31,7 +31,7 @@ export default defineEventHandler(async (event) => {
   if (!strapiUrl) { throw createError({ statusCode: 500, statusMessage: 'Server configuration error.' }); }
   
   try {
-    const freshUser = await $fetch(`${strapiUrl}/api/users/me?populate=role`, {
+    const freshUser = await $fetch(`${strapiUrl}/api/users/me?fields=*&populate=role`, {
         method: 'GET',
         headers: {
             Authorization: `Bearer ${token}`,
