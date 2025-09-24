@@ -1,12 +1,13 @@
 // server/api/auth/me.get.ts
-import { createError, defineEventHandler, getCookie } from 'h3';
+import { createError, defineEventHandler, getCookie } from "h3";
 
 export default defineEventHandler(async (event) => {
-  const token = getCookie(event, 'auth_token');
+  const token = getCookie(event, "auth_token");
 
-  // If there's no token, the user is not authenticated. Return null.
-  // This is a valid, expected state, not an error.
+  console.log("BFF - /api/auth/me: Checking for user...");
+
   if (!token) {
+    console.log("BFF - /api/auth/me: No auth_token cookie found. User is not logged in.");
     return null;
   }
 
@@ -28,22 +29,24 @@ export default defineEventHandler(async (event) => {
   // to Strapi to get the FRESH and VERIFIED user data.
   const config = useRuntimeConfig();
   const strapiUrl = config.strapi?.url || process.env.STRAPI_URL;
-  if (!strapiUrl) { throw createError({ statusCode: 500, statusMessage: 'Server configuration error.' }); }
-  
+  if (!strapiUrl) {
+    throw createError({ statusCode: 500, statusMessage: "Server configuration error." });
+  }
+
   try {
     const freshUser = await $fetch(`${strapiUrl}/api/users/me?fields=*&populate=role`, {
-        method: 'GET',
-        headers: {
-            Authorization: `Bearer ${token}`,
-        },
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
     });
     // Return the fresh, verified user data from Strapi.
     return freshUser;
   } catch (e) {
     // If the token is invalid on Strapi's end (e.g., expired), it will error out.
     // In this case, the user is effectively logged out.
-    console.warn('BFF - /api/auth/me: Token validation failed against Strapi.', e.data?.error?.message);
-    deleteCookie(event, 'auth_token'); // Clean up the bad cookie
+    console.warn("BFF - /api/auth/me: Token validation failed against Strapi.", e.data?.error?.message);
+    deleteCookie(event, "auth_token"); // Clean up the bad cookie
     return null;
   }
 });
