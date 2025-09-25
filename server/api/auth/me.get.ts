@@ -28,7 +28,7 @@ export default defineEventHandler(async (event) => {
   // For a critical "who am I" endpoint, it's best practice to make a quick call
   // to Strapi to get the FRESH and VERIFIED user data.
   const config = useRuntimeConfig();
-  const strapiUrl = config.strapi?.url || process.env.STRAPI_URL;
+  const strapiUrl = config.public.strapi.url || process.env.NUXT_PUBLIC_API_BASE;
   if (!strapiUrl) {
     throw createError({ statusCode: 500, statusMessage: "Server configuration error." });
   }

@@ -1,14 +1,14 @@
 // server/api/profile/update.put.ts
-import { createError, defineEventHandler, getCookie, readBody } from 'h3';
+import { createError, defineEventHandler, getCookie, readBody } from "h3";
 
 export default defineEventHandler(async (event) => {
-  const token = getCookie(event, 'auth_token');
+  const token = getCookie(event, "auth_token");
   const body = await readBody(event); // The payload for Strapi
 
   if (!token) {
     throw createError({
       statusCode: 401,
-      statusMessage: 'Unauthorized: No authentication token found.',
+      statusMessage: "Unauthorized: No authentication token found.",
     });
   }
 
@@ -23,23 +23,25 @@ export default defineEventHandler(async (event) => {
   // Make sure your auth.global.ts populates event.context.user with `id`.
   const userId = event.context.user?.id;
   if (!userId) {
-      throw createError({
-          statusCode: 403,
-          statusMessage: 'Forbidden: User ID not available for update.',
-      });
+    throw createError({
+      statusCode: 403,
+      statusMessage: "Forbidden: User ID not available for update.",
+    });
   }
 
   try {
     const config = useRuntimeConfig();
-    const strapiUrl = config.strapi?.url || process.env.STRAPI_URL;
-    if (!strapiUrl) { throw createError({ statusCode: 500, statusMessage: 'Server config error.' }); }
+    const strapiUrl = config.public.strapi?.url || process.env.NUXT_PUBLIC_API_BASE;
+    if (!strapiUrl) {
+      throw createError({ statusCode: 500, statusMessage: "Server config error." });
+    }
 
     // Strapi's `/api/users/:id` endpoint expects a specific structure for updates
     // The `body` from client should contain fields like `displayName`, `birthDate`, `profilePicture` (id).
     const response = await $fetch(`${strapiUrl}/api/users/${userId}`, {
-      method: 'PUT',
+      method: "PUT",
       headers: {
-        'Content-Type': 'application/json',
+        "Content-Type": "application/json",
         Authorization: `Bearer ${token}`,
       },
       body: body, // Forward the client's payload directly
@@ -47,10 +49,10 @@ export default defineEventHandler(async (event) => {
 
     return response;
   } catch (e: any) {
-    console.error('BFF - Error updating user profile on Strapi:', e.response?._data || e.message);
+    console.error("BFF - Error updating user profile on Strapi:", e.response?._data || e.message);
     throw createError({
       statusCode: e.response?.status || 500,
-      statusMessage: e.response?._data?.error?.message || 'Failed to update user profile.',
+      statusMessage: e.response?._data?.error?.message || "Failed to update user profile.",
     });
   }
 });
