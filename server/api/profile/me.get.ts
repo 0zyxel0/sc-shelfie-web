@@ -1,14 +1,14 @@
 // server/api/profile/me.get.ts
-import { createError, defineEventHandler, getCookie, getQuery } from 'h3';
-import qs from 'qs';
+import { createError, defineEventHandler, getCookie, getQuery } from "h3";
+import qs from "qs";
 
 export default defineEventHandler(async (event) => {
-  const token = getCookie(event, 'auth_token');
+  const token = getCookie(event, "auth_token");
 
   if (!token) {
     throw createError({
       statusCode: 401,
-      statusMessage: 'Unauthorized: No authentication token found.',
+      statusMessage: "Unauthorized: No authentication token found.",
     });
   }
 
@@ -19,50 +19,50 @@ export default defineEventHandler(async (event) => {
     // --- Dynamic Populate Logic ---
     // This logic handles various ways the client might request populate and
     // ensures the Strapi-expected deep object structure for connections.
-    if (typeof paramsForStrapi.populate === 'string' && paramsForStrapi.populate.startsWith('{')) {
+    if (typeof paramsForStrapi.populate === "string" && paramsForStrapi.populate.startsWith("{")) {
       // If populate came as a stringified JSON, parse it
       try {
         paramsForStrapi.populate = JSON.parse(paramsForStrapi.populate);
       } catch (e) {
-        console.warn('BFF - Could not JSON.parse populate string:', paramsForStrapi.populate, e);
+        console.warn("BFF - Could not JSON.parse populate string:", paramsForStrapi.populate, e);
       }
     } else if (Array.isArray(paramsForStrapi.populate)) {
       // If populate is an array (e.g., ['profilePicture', 'followers', 'following'])
       // Convert it to the deep object structure Strapi expects for connections
       const newPopulate = {};
-      if (paramsForStrapi.populate.includes('profilePicture')) {
+      if (paramsForStrapi.populate.includes("profilePicture")) {
         newPopulate.profilePicture = true;
       }
-      if (paramsForStrapi.populate.includes('followers')) {
-        newPopulate.followers = { populate: 'profilePicture' }; // Deep populate for connections
+      if (paramsForStrapi.populate.includes("followers")) {
+        newPopulate.followers = { populate: "profilePicture" }; // Deep populate for connections
       }
-      if (paramsForStrapi.populate.includes('following')) {
-        newPopulate.following = { populate: 'profilePicture' }; // Deep populate for connections
+      if (paramsForStrapi.populate.includes("following")) {
+        newPopulate.following = { populate: "profilePicture" }; // Deep populate for connections
       }
       paramsForStrapi.populate = newPopulate;
-    } else if (typeof paramsForStrapi.populate === 'object' && paramsForStrapi.populate !== null) {
+    } else if (typeof paramsForStrapi.populate === "object" && paramsForStrapi.populate !== null) {
       // If it's already a deep object, ensure nested populates are correct for connections
       if (paramsForStrapi.populate.followers === true) {
-        paramsForStrapi.populate.followers = { populate: 'profilePicture' };
+        paramsForStrapi.populate.followers = { populate: "profilePicture" };
       }
       if (paramsForStrapi.populate.following === true) {
-        paramsForStrapi.populate.following = { populate: 'profilePicture' };
+        paramsForStrapi.populate.following = { populate: "profilePicture" };
       }
     } else {
       // Default populate if none is provided or recognized for a comprehensive user profile
       paramsForStrapi.populate = {
         profilePicture: true,
-        followers: { populate: 'profilePicture' }, // Ensure deep populate for picture in followers
-        following: { populate: 'profilePicture' }  // Ensure deep populate for picture in following
+        followers: { populate: "profilePicture" }, // Ensure deep populate for picture in followers
+        following: { populate: "profilePicture" }, // Ensure deep populate for picture in following
       };
     }
 
     // Do the same for 'filters' if it's potentially a stringified JSON
-    if (typeof paramsForStrapi.filters === 'string' && paramsForStrapi.filters.startsWith('{')) {
+    if (typeof paramsForStrapi.filters === "string" && paramsForStrapi.filters.startsWith("{")) {
       try {
         paramsForStrapi.filters = JSON.parse(paramsForStrapi.filters);
       } catch (e) {
-        console.warn('BFF - Could not JSON.parse filters string:', paramsForStrapi.filters, e);
+        console.warn("BFF - Could not JSON.parse filters string:", paramsForStrapi.filters, e);
       }
     }
 
@@ -70,23 +70,23 @@ export default defineEventHandler(async (event) => {
     const query = qs.stringify(paramsForStrapi, { encodeValuesOnly: true });
 
     const config = useRuntimeConfig();
-    const strapiUrl = config.strapi?.url || process.env.STRAPI_URL;
+    const strapiUrl = config.public.strapi?.url || process.env.NUXT_PUBLIC_API_BASE;
 
     if (!strapiUrl) {
       throw createError({
         statusCode: 500,
-        statusMessage: 'Server configuration error: Strapi URL not defined in runtimeConfig or environment.',
+        statusMessage: "Server configuration error: Strapi URL not defined in runtimeConfig or environment.",
       });
     }
 
-    console.log('BFF - Query string sent to Strapi for /users/me:', query);
+    console.log("BFF - Query string sent to Strapi for /users/me:", query);
     const response = await $fetch(`${strapiUrl}/api/users/me?${query}`, {
-      method: 'GET',
+      method: "GET",
       headers: {
         Authorization: `Bearer ${token}`,
       },
     });
-    console.log('BFF - Raw response from Strapi /users/me:', response);
+    console.log("BFF - Raw response from Strapi /users/me:", response);
 
     // --- Transform nested user objects (followers/following) for client-side consumption ---
     // Strapi returns profilePicture nested as `data.attributes.url`
@@ -112,12 +112,11 @@ export default defineEventHandler(async (event) => {
       // Ensure the *main* user's profile picture is also flattened if needed by global `user` state
       profilePicture: response.profilePicture?.data?.attributes?.url ? { url: response.profilePicture.data.attributes.url } : null,
     };
-
   } catch (e: any) {
-    console.error('BFF - Error fetching user profile from Strapi:', e.response?._data || e.message);
+    console.error("BFF - Error fetching user profile from Strapi:", e.response?._data || e.message);
     throw createError({
       statusCode: e.response?.status || 500,
-      statusMessage: e.response?._data?.error?.message || 'Failed to fetch user profile.',
+      statusMessage: e.response?._data?.error?.message || "Failed to fetch user profile.",
     });
   }
 });

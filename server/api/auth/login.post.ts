@@ -6,12 +6,12 @@ export default defineEventHandler(async (event) => {
 
   // --- 1. Log the variables to see what the server is reading ---
   console.log("BFF - Login attempt started.");
-  console.log(`BFF - STRAPI_URL read as: ${config.strapi.url}`);
+  console.log(`BFF - STRAPI_URL read as: ${config.public.strapi.url}`);
   console.log(`BFF - NUXT_PUBLIC_SITE_URL read as: ${config.publicSiteUrl}`);
 
   try {
     // --- 2. Validate environment variables explicitly ---
-    if (!config.strapi.url || !config.publicSiteUrl) {
+    if (!config.public.strapi.url || !config.publicSiteUrl) {
       console.error("BFF - CRITICAL ERROR: STRAPI_URL or NUXT_PUBLIC_SITE_URL is not defined in the server environment!");
       throw createError({
         statusCode: 500,
@@ -34,7 +34,7 @@ export default defineEventHandler(async (event) => {
     // --- 4. Isolate the Strapi fetch call ---
     let response;
     try {
-      response = await $fetch<{ jwt: string; user: any }>(`${config.strapi.url}/api/auth/local`, {
+      response = await $fetch<{ jwt: string; user: any }>(`${config.public.strapi.url}/api/auth/local`, {
         method: "POST",
         body: {
           identifier: body.email,
