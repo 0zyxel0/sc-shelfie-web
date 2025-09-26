@@ -22,8 +22,8 @@ RUN yarn install
 ENV NODE_ENV=production
 ENV NITRO_PORT=3000
 ENV NITRO_HOST=0.0.0.0
-ENV STRAPI_API_URL=
-ENV NUXT_PUBLIC_STRAPI_API_URL=
+ENV STRAPI_API_URL=https://shelfieserver.scribblecubes.ph
+ENV NUXT_PUBLIC_STRAPI_API_URL=https://shelfieserver.scribblecubes.ph
 # Build the production Version of the Application
 RUN yarn build
 
