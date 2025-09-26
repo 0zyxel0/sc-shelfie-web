@@ -73,7 +73,7 @@
 
 <script setup>
 definePageMeta({ layout: false })
-const { register } = useStrapiAuth()
+const { login, register } = useStrapiAuth()
 const router = useRouter()
 
 const username = ref('')
@@ -90,14 +90,17 @@ const handleAuth = async () => {
                 username: username.value,
                 email: email.value,
                 password: password.value
-            })
+            });
+            if (data.error) {
+                throw new Error(data.error.message);
+            }
             router.push('/profile/edit')
+
         } else {
-            await $fetch('/api/auth/login', {
-                method: 'POST',
-                body: { email: email.value, password: password.value },
-            })
-            router.push('/my-shelf')
+            const result = await login({ identifier: email.value, password: password.value })
+            if (result) {
+                router.push('/my-shelf');
+            }
         }
     } catch (e) {
         errorMessage.value = e.data?.statusMessage || 'An unexpected error occurred.'
