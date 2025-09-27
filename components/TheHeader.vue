@@ -80,7 +80,9 @@ const isMenuOpen = ref(false);
 const searchQuery = ref('');
 const router = useRouter();
 
-const { user, fetchUser } = useAuthUser();
+const { fetchUser } = useStrapiAuth()
+
+const user = await fetchUser()
 
 await useAsyncData('header-user-fetch', async () => {
   if (!user.value) {
@@ -89,7 +91,6 @@ await useAsyncData('header-user-fetch', async () => {
   return user.value;
 });
 
-// --- FIX: Computed property now checks the `subscriptionType` field ---
 const isPremiumUser = computed(() => user.value?.subscriptionType === 'Premium');
 
 const performSearch = () => {
