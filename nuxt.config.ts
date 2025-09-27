@@ -21,7 +21,7 @@ export default defineNuxtConfig({
       secure: process.env.NODE_ENV === 'production',
       sameSite: true,
     },
-    cookieName: 'shelfie_jwt',
+    cookieName: 'auth_token',
   },
   app: {
     head: {
