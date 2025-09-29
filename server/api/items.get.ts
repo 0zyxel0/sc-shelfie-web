@@ -39,6 +39,24 @@ export default defineEventHandler(async (event): Promise<any> => {
       paramsForStrapi.pagination.pageSize = Number(paramsForStrapi.pagination.pageSize);
     }
 
+    // --- IMPORTANT: Enhance populate for itags to include voteCount ---
+    // This assumes the client passed populate as an array or specific object for `itags`
+    // We need to ensure `itags` are always deeply populated to get their attributes including voteCount.
+    if (paramsForStrapi.populate && Array.isArray(paramsForStrapi.populate)) {
+      // Find 'itags' in the populate array and replace or add with deep populate
+      const itagsIndex = paramsForStrapi.populate.findIndex((p) => p === "itags");
+      if (itagsIndex !== -1) {
+        paramsForStrapi.populate[itagsIndex] = { itags: { fields: ["name", "voteCount", "documentId"] } };
+      } else {
+        paramsForStrapi.populate.push({ itags: { fields: ["name", "voteCount", "documentId"] } });
+      }
+    } else if (paramsForStrapi.populate && typeof paramsForStrapi.populate === "object" && paramsForStrapi.populate.itags === true) {
+      paramsForStrapi.populate.itags = { fields: ["name", "voteCount", "documentId"] };
+    } else if (!paramsForStrapi.populate) {
+      // If no populate was specified, add a default deep populate for itags
+      paramsForStrapi.populate = { itags: { fields: ["name", "voteCount", "documentId"] } };
+    }
+
     // Stringify the now-consistent nested object into square-bracket notation for Strapi
     const query = qs.stringify(paramsForStrapi, { encodeValuesOnly: true });
 

@@ -10,8 +10,8 @@
           <button @click="activeTag = null" :class="[...tagButtonBaseClasses, !activeTag ? tagButtonActiveClasses : tagButtonInactiveClasses]">
             All Items
           </button>
-          <!-- Tag Buttons -->
-          <button v-for="tag in tags" :key="tag.id" @click="activeTag = tag.name" :class="[...tagButtonBaseClasses, activeTag === tag.name ? tagButtonActiveClasses : tagButtonInactiveClasses]">
+          <!-- Tag Buttons (now sorted by voteCount, but only name displayed) -->
+          <button v-for="tag in sortedTags" :key="tag.id" @click="activeTag = tag.name" :class="[...tagButtonBaseClasses, activeTag === tag.name ? tagButtonActiveClasses : tagButtonInactiveClasses]">
             {{ tag.name }}
           </button>
         </div>
@@ -35,64 +35,97 @@
 </template>
 
 <script setup>
-import qs from 'qs';
+import { ref, computed } from 'vue'; // Explicitly import ref, computed
+// Removed `qs` as it's not used client-side here
 useHead({ title: 'Home | Shelfie' });
 
 const config = useRuntimeConfig();
 const activeTag = ref(null);
 
-// --- DATA FETCHING (Using separate, stable useAsyncData calls) ---
+// --- DATA FETCHING ---
 const { data: items, pending: itemsPending } = await useAsyncData(
   'homepage-items',
   async () => {
-    const query = qs.stringify({
-      filters: { isPrivate: { $eq: false } },
-      populate: '*',
-      pagination: { pageSize: 100 },
-      sort: 'createdAt:desc',
-    }, { encodeValuesOnly: true });
-    const response = await $fetch(`${config.public.strapi.url}/api/items?${query}`);
-    console.log("Fetched items:", response);
-    return response.data;
+    // Calling your existing BFF endpoint for items.
+    // Ensure `itags` are populated to allow client-side filtering.
+    // The `/api/items.get.ts` has been updated to ensure deep populate for itags with voteCount.
+    return await $fetch('/api/items', {
+      method: 'GET',
+      query: {
+        filters: { isPrivate: { '$eq': false } },
+        populate: ['userImages', 'manufacturer', 'character', 'series', 'categories', 'itags'], // Request itags to be populated
+        'pagination[pageSize]': 100,
+        sort: 'createdAt:desc',
+      },
+    });
   },
   {
-    // The proven transform function to flatten data
     transform: (response) => {
-      console.log("Transforming items:", response);
-      if (!response) return [];
-      return response.map(item => {
-        const flatItem = { id: item.id, ...item };
-        // This is a simplified transform that you confirmed works for other pages.
-        // Let's ensure relations are also handled if they're nested.
-        if (flatItem.user?.data) { flatItem.user = { id: flatItem.user.data.id, ...flatItem.user.data }; }
-        if (flatItem.itags?.data) { flatItem.itags = flatItem.itags.data.map(t => ({ id: t.id, ...t })); }
-        return flatItem;
+      if (!response?.data) return [];
+      return response.data.map(item => {
+        const transformedItem = { id: item.id, ...item };
+
+        // Flatten relations as needed for ShowcaseCard (similar to my-shelf.vue)
+        if (transformedItem.user) {
+          transformedItem.user = { id: transformedItem.user.id, ...transformedItem.user };
+        } else if (transformedItem.user) { // If user is just ID
+          transformedItem.user = { id: transformedItem.user.id };
+        } else {
+          transformedItem.user = null; // Ensure user is null if no data
+        }
+
+        if (transformedItem.manufacturer) {
+          transformedItem.manufacturer = transformedItem.manufacturer.name;
+        } else { transformedItem.manufacturer = null; }
+
+        if (transformedItem.series) {
+          transformedItem.series = transformedItem.series.name;
+        } else { transformedItem.series = null; }
+
+        if (transformedItem.categories?.length) {
+          transformedItem.categories = transformedItem.categories.map(cat => cat.name);
+        } else { transformedItem.categories = []; }
+
+        // --- Crucially, flatten itags from item response, including voteCount ---
+        if (transformedItem.itags?.length) {
+          transformedItem.itags = transformedItem.itags.map(tag => ({
+            id: tag.id,
+            name: tag.name,
+            voteCount: tag.voteCount || 0, // Include voteCount for potential future use or display
+          }));
+        } else {
+          transformedItem.itags = [];
+        }
+
+        if (transformedItem.userImages?.length) {
+          transformedItem.userImages = transformedItem.userImages.map(img => ({
+            id: img.id,
+            url: config.public.strapi.url + img.url,
+          }));
+        } else {
+          transformedItem.userImages = [];
+        }
+
+        return transformedItem;
       });
-    }
+    },
+    server: true // Ensure this runs during SSR
   }
 );
 
-const { data: tags, pending: tagsPending } = await useAsyncData(
-  'homepage-tags',
+// --- Fetch tags, now from the new sorted BFF endpoint ---
+const { data: sortedTags, pending: tagsPending } = await useAsyncData(
+  'homepage-sorted-tags',
   async () => {
-    const response = await $fetch(`${config.public.strapi.url}/api/itags/top`);
-    return response.data || response || [];
-  }
+    // Call your new BFF endpoint for sorted tags
+    return await $fetch('/api/tags/sorted');
+  },
+  { server: true } // Ensure this runs during SSR
 );
-
-if (process.client) {
-  watch(items, (newItems) => {
-    console.log('✅ Final Transformed items data:', newItems);
-    if (newItems && newItems.length > 0) {
-      console.log('Example itags:', newItems[0].itags);
-    }
-  }, { immediate: true });
-}
-
 
 const pending = computed(() => itemsPending.value || tagsPending.value);
 
-// --- THE CORRECTED FILTERING LOGIC ---
+// --- THE FILTERING LOGIC ---
 const filteredItems = computed(() => {
   const allItems = items.value || [];
   if (!activeTag.value) {
@@ -100,11 +133,10 @@ const filteredItems = computed(() => {
   }
 
   return allItems.filter(item => {
-    // Check if the item has the `itags` property (which is now a simple array).
     if (!item.itags || !Array.isArray(item.itags)) {
       return false;
     }
-    // Check if any tag in the now-flat array has a name that matches the activeTag.
+    // Check if any tag in the item's `itags` array has a name that matches `activeTag`.
     return item.itags.some(tag => tag.name === activeTag.value);
   });
 });

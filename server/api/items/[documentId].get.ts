@@ -26,16 +26,15 @@ export default defineEventHandler(async (event) => {
 
   try {
     // --- Fetch Core Item Data ---
-    const itemQuery = qs.stringify(
-      {
-        filters: { documentId: { $eq: documentId } },
-        // Populate all relations for the main item
-        populate: ["user", "userImages", "manufacturer", "character", "series", "categories", "itags", "likedBy"],
-      },
-      { encodeValuesOnly: true }
-    );
+    const itemQuery = qs.stringify({
+      filters: { documentId: { $eq: documentId } },
+      // Populate all relations for the main item
+      populate: ["user", "userImages", "manufacturer", "character", "series", "categories", "itags", "likedBy"],
+      encodeValuesOnly: true,
+    });
 
     const itemResponse = await $fetch(`${strapiUrl}/api/items?${itemQuery}`);
+    console.log("BFF - Fetched item data:", itemResponse);
 
     if (!itemResponse.data || itemResponse.data.length === 0) {
       throw createError({ statusCode: 404, statusMessage: "Item not found" });
@@ -49,7 +48,13 @@ export default defineEventHandler(async (event) => {
     item.character = flattenAttributes(item.character);
     item.series = flattenAttributes(item.series);
     item.categories = item.categories?.map(flattenAttributes) || [];
-    item.itags = item.itags?.map(flattenAttributes) || [];
+    item.itags =
+      item.itags?.map((tag) => ({
+        id: tag.id,
+        documentId: tag.documentId,
+        name: tag.name,
+        voteCount: tag.voteCount || 0,
+      })) || [];
     item.likedBy = item.likedBy?.map(flattenAttributes) || [];
     item.userImages = item.userImages?.map(flattenAttributes) || [];
 
