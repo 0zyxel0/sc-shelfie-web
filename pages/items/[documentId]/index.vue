@@ -91,11 +91,10 @@
                         <div v-if="item.itags?.length > 0" class="mt-6">
                             <h3 class="font-semibold text-gray-700">Tags</h3>
                             <div class="mt-2 flex flex-wrap gap-2">
-                                <span v-for="tag in item.itags" :key="tag.id" class="text-xs font-semibold bg-purple-100 text-purple-800 py-1 px-3 rounded-full">
-                                    {{ tag.name }}
-                                </span>
+                                <TagVoteButtons v-for="tag in item.itags" :key="tag.id" :tag="tag" />
                             </div>
                         </div>
+
 
                         <!-- User Description -->
                         <div v-if="item.description" class="mt-6">

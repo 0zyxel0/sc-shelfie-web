@@ -151,8 +151,8 @@ const { data: userItems, pending: itemsPending } = await useAsyncData(
 
 // --- Computed Properties for Display ---
 const profilePictureUrl = computed(() => {
-  if (user.value?.profilePicture?.data?.url) {
-    return user.value.profilePicture.data.url || (config.public.strapi.url + user.value.profilePicture.data.url);
+  if (user.value?.profilePicture?.url) {
+    return user.value.profilePicture.url || (config.public.strapi.url + user.value.profilePicture.url);
   }
   return '/avatar-placeholder.png';
 });
