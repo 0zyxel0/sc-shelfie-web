@@ -73,7 +73,7 @@ import { computed } from 'vue';
 definePageMeta({ middleware: 'auth' });
 useHead({ title: 'Upcoming Pre-orders | Shelfie' });
 
-const { user: currentUser } = useAuthUser();
+const currentUser = useStrapiUser();
 const config = useRuntimeConfig();
 
 // --- Simplified Data Fetch ---
