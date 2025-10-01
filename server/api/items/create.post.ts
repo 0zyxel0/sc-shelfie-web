@@ -44,6 +44,7 @@ const findOrCreate = async (endpoint, name, strapiUrl, token) => {
 export default defineEventHandler(async (event) => {
   const token = getCookie(event, "auth_token");
   const userId = event.context.user?.id; // From our auth middleware
+  const { $strapi } = event.context;
 
   if (!token || !userId) {
     throw createError({
@@ -85,9 +86,8 @@ export default defineEventHandler(async (event) => {
         strapiUploadFormData.append("files", blob, file.filename);
       });
 
-      const uploadedFiles = await $fetch(`${strapiUrl}/api/upload`, {
+      const uploadedFiles = await $strapi.client(`/upload`, {
         method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
         body: strapiUploadFormData,
       });
       imageIds = uploadedFiles.map((file) => file.id);
@@ -125,9 +125,8 @@ export default defineEventHandler(async (event) => {
     };
 
     // Step 4: Create the final item
-    const { data: createdItem } = await $fetch(`${strapiUrl}/api/items`, {
+    const { data: createdItem } = await $strapi.client(`/items`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
       body: payload,
     });
 

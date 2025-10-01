@@ -77,7 +77,7 @@
 
                 <div class="mb-4">
                     <label for="tags" class="block text-gray-700 text-sm font-bold mb-2">Tags</label>
-                    <TagInput v-model="form.tags" placeholder="e.g., rare, custom paint" />
+                    <TagInput v-model="form.itags" placeholder="e.g., rare, custom paint" />
                 </div>
 
                 <!-- Purchase Price & Date -->
@@ -131,20 +131,51 @@ definePageMeta({ middleware: 'auth' });
 useHead({ title: 'Add New Item | Shelfie' });
 
 const router = useRouter();
+const { find } = useStrapi();
+const client = useStrapiClient();
+const user = useStrapiUser();
 
+// --- UTILITY FUNCTIONS (Unchanged) ---
+const findOrCreateRelation = async (entityType, name) => {
+    if (!name) return null;
+    const cleanName = name.trim();
+
+    const existing = await find(entityType, {
+        filters: { name: { $eqi: cleanName } },
+        pagination: { limit: 1 }
+    });
+
+    console.log(`🔍 Checking for existing ${entityType} with name "${cleanName}":`, existing);
+
+    if (existing?.data?.length > 0) {
+        return existing.data[0].documentId;
+    }
+
+    const newEntity = await client(`${entityType}`, {
+        method: 'POST',
+        body: { data: { name: cleanName } }
+    });
+
+    console.log(`➕ Created new ${entityType} with name "${cleanName}":`, newEntity);
+
+    return newEntity?.data?.documentId;
+};
+
+
+// --- FORM STATE, FILE HANDLERS (Unchanged) ---
 const form = reactive({
     name: '',
     itemStatus: 'Owned',
     description: '',
     purchasePrice: null,
     purchaseDate: null,
-    files: [], // To hold the actual file objects
+    files: [], // Crucial: This field exists on the reactive form state
     isPrivate: false,
     manufacturer: '',
     character: '',
     series: '',
-    categories: [], // Now directly part of the form
-    tags: [],       // Now directly part of the form
+    categories: [],
+    itags: [],
 });
 
 const imagePreviews = ref([]);
@@ -161,55 +192,96 @@ const handleFileChange = (e) => {
 
 const removeImage = (index) => {
     URL.revokeObjectURL(imagePreviews.value[index]);
-    imagePreviews.value.splice(index, 1);
     form.files.splice(index, 1);
+    imagePreviews.value.splice(index, 1);
 };
+
+
+// --- SUBMISSION LOGIC (Applied Fix: Clean Payload) ---
 
 const handleSubmit = async () => {
     loading.value = true;
     errorMessage.value = null;
 
     try {
-        // Use FormData to send both files and text data
-        const formData = new FormData();
+        if (!user.value?.id) {
+            throw new Error("User authentication failed.");
+        }
 
-        // Append all text fields
-        formData.append('name', form.name);
-        formData.append('itemStatus', form.itemStatus);
-        formData.append('description', form.description || '');
-        if (form.purchasePrice !== null) formData.append('purchasePrice', form.purchasePrice);
-        if (form.purchaseDate) formData.append('purchaseDate', form.purchaseDate);
-        formData.append('isPrivate', form.isPrivate);
-        formData.append('manufacturer', form.manufacturer || '');
-        formData.append('character', form.character || '');
-        formData.append('series', form.series || '');
-        // Join arrays into comma-separated strings for the server
-        formData.append('categories', form.categories.join(','));
-        formData.append('tags', form.tags.join(','));
+        let imageIds = [];
+        if (form.files.length > 0) {
+            const strapiUploadFormData = new FormData();
+            form.files.forEach((file) => {
+                strapiUploadFormData.append("files", file
+                );
+            });
 
-        // Append all file objects
-        form.files.forEach((file, index) => {
-            formData.append(`file_${index}`, file); // Give each file a unique name
-        });
+            const uploadedFiles = await client(`/upload`, {
+                method: "POST",
+                body: strapiUploadFormData,
+            });
+            imageIds = uploadedFiles.map((file) => file.id);
+        }
 
-        // Make a single call to our BFF orchestration endpoint
-        const createdItem = await $fetch('/api/items/create', {
+        // 1. FIND/CREATE RELATIONS
+        const [
+            manufacturerId,
+            characterId,
+            seriesId,
+            categoryIds,
+            tagIds
+        ] = await Promise.all([
+            findOrCreateRelation('manufacturers', form.manufacturer),
+            findOrCreateRelation('characters', form.character),
+            findOrCreateRelation('serieses', form.series),
+            Promise.all(form.categories.map(c => findOrCreateRelation('categories', c))),
+            Promise.all(form.itags.map(t => findOrCreateRelation('itags', t)))
+        ]);
+
+        // 2. CONSTRUCT CLEAN ITEM PAYLOAD (JSON part)
+        // We MUST explicitly pick attributes and relations and avoid spreading 'form'
+        // to prevent reactive properties (like the `files` array) from leaking into the JSON payload.
+        const itemPayload = {
+            data: {
+                name: form.name,
+                itemStatus: form.itemStatus,
+                description: form.description,
+                purchasePrice: form.purchasePrice,
+                purchaseDate: form.purchaseDate,
+                isPrivate: form.isPrivate,
+                userImages: imageIds,
+                user: user.value.id,
+                manufacturer: manufacturerId,
+                character: characterId,
+                series: seriesId,
+                categories: categoryIds.filter(Boolean),
+                itags: tagIds.filter(Boolean),
+            }
+            // IMPORTANT: The `files` property that existed on the reactive 'form' state is explicitly excluded here.
+        };
+
+        // 4. EXECUTE COMBINED CREATE REQUEST
+        const createdItemResponse = await client(`items`, {
             method: 'POST',
-            body: formData, // $fetch handles multipart/form-data encoding
+            body: itemPayload,
         });
+        console.log('✅ SUCCESS: Item created:', createdItemResponse);
+        const createdItemId = createdItemResponse?.data?.documentId;
 
-        // The BFF endpoint returns the new item's ID
-        if (createdItem.id) {
-            router.push(`/items/${createdItem.documentId || createdItem.id}`);
+        if (createdItemId) {
+            router.push(`/items/${createdItemId}`);
         } else {
-            throw new Error("Could not find item ID in the API response.");
+            throw new Error("Strapi item creation failed or returned no ID.");
         }
 
     } catch (e) {
-        console.error('❌ ERROR: Submission failed.', e.data || e);
-        errorMessage.value = e.data?.statusMessage || e.message || "An error occurred.";
+        // Logging the error structure is key for further debugging
+        console.error('❌ ERROR: Submission failed.', e.response?.data || e);
+        const apiError = e.response?.data?.error?.message || e.message;
+        errorMessage.value = `Submission failed: ${apiError}`;
     } finally {
         loading.value = false;
+        imagePreviews.value.forEach(url => URL.revokeObjectURL(url));
     }
 };
 </script>

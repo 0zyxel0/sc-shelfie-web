@@ -107,6 +107,7 @@
                         <p class="text-gray-500 mt-2">Try adjusting or resetting your filters.</p>
                     </div>
                     <div v-else class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                        <!-- Assuming ItemCard component is available -->
                         <ItemCard v-for="item in filteredItems" :key="item.id" :item="item" />
                     </div>
                 </div>
@@ -116,57 +117,60 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, watch } from 'vue';
+import { ref, reactive, computed } from 'vue';
 import { onClickOutside } from '@vueuse/core';
 
 definePageMeta({ middleware: 'auth' });
 useHead({ title: 'My Shelf | Shelfie' });
 
-const { user, isLoading: userLoading, fetchUser } = useAuthUser();
+const user = useStrapiUser();
+const { find } = useStrapi(); // Import useStrapi
 
 const isPremiumUser = computed(() => user.value?.subscriptionType === 'Premium');
 const config = useRuntimeConfig();
 
-await useAsyncData(
-    'my-shelf-initial-user-fetch',
-    async () => {
-        if (!user.value) {
-            await fetchUser();
-        }
-    },
-    { server: true, lazy: true }
-);
+// --- UTILITY FOR SAFELY EXTRACTING RELATIONS ---
+/**
+ * Helper to safely extract attributes from a populated Strapi relation object (V5 structure).
+ */
+const getRelationAttributes = (relation) => {
+    if (!relation || !relation.data) return null;
+    if (Array.isArray(relation)) {
+        // Handle many relations (returns array of attributes)
+        return relation.map(entry => ({ id: entry.id, ...entry }));
+    }
+    // Handle single relation (returns single object of attributes)
+    return { id: relation.id, ...relation };
+};
 
-const { data: items, pending: itemsPending, error: itemsError } = await useAsyncData(
+
+// --- DATA FETCHING: ITEMS (Using useStrapi) ---
+
+const { data: itemsResponse, pending: itemsPending, error: itemsError } = await useAsyncData(
     "my-shelf-all-items",
     async () => {
-        if (!user.value?.id) return [];
+        const userId = user.value?.id;
+        if (!userId) return null; // Return null to signal no data if user ID is missing
 
-        return await $fetch("/api/items", {
-            method: 'GET',
-            query: {
-                populate: {
-                    userImages: true,
-                    manufacturer: true,
-                    character: true,
-                    series: true,
-                    categories: true,
-                    itags: true,
-                },
-                filters: { user: { id: { '$eq': user.value.id } } },
-                // --- FIX: USE A NESTED OBJECT FOR PAGINATION ---
-                pagination: {
-                    pageSize: 2500,
-                },
-                sort: "createdAt:desc",
-            },
-        })
+        const itemQueryParams = {
+            // Populate all required relations
+            populate: ['userImages', 'manufacturer', 'character', 'series', 'categories', 'itags'],
+            // Filter by the currently logged-in user ID
+            filters: { user: { id: { '$eq': userId } } },
+            pagination: { pageSize: 2500 }, // Fetch enough for the whole shelf
+            sort: ['createdAt:desc'],
+        };
+
+        return await find('items', itemQueryParams);
     },
     {
         transform: (response) => {
+            console.log("Raw items response:", response);
             if (!response?.data) return [];
-            console.log("Raw items response:", response.data);
-            return response.data.map((item) => {
+
+            return response.data.map((rawItem) => {
+                const item = rawItem;
+
                 const transformedItem = { id: item.id, ...item };
                 transformedItem.manufacturer = transformedItem.manufacturer?.name || null;
                 transformedItem.series = transformedItem.series?.name || null;
@@ -186,12 +190,16 @@ const { data: items, pending: itemsPending, error: itemsError } = await useAsync
                 return transformedItem;
             });
         },
+        // Re-fetch whenever the user ID changes (i.e., when fetchUser resolves)
         watch: [() => user.value?.id],
         server: true,
     }
 );
 
-// --- Filter State & Logic (unchanged) ---
+const items = computed(() => itemsResponse.value || []);
+console.log("Transformed items:", items);
+
+// --- Filter State & Logic (Unchanged) ---
 const filters = reactive({
     status: 'All',
     category: 'All',
@@ -203,24 +211,29 @@ const statusOptions = computed(() => {
     const statuses = new Set(items.value?.map(item => item.itemStatus) || []);
     return ['All', ...Array.from(statuses).sort()];
 });
+console.log("Status Options:", statusOptions.value);
 const categoryOptions = computed(() => {
     const categories = new Set();
     items.value?.forEach(item => item.categories.forEach(cat => categories.add(cat)));
     return ['All', ...Array.from(categories).sort()];
 });
+console.log("Category Options:", categoryOptions.value);
 const manufacturerOptions = computed(() => {
     const manufacturers = new Set(items.value?.map(item => item.manufacturer).filter(Boolean) || []);
     return ['All', ...Array.from(manufacturers).sort()];
 });
+console.log("Manufacturer Options:", manufacturerOptions.value);
 const seriesOptions = computed(() => {
     const seriesList = new Set(items.value?.map(item => item.series).filter(Boolean) || []);
     return ['All', ...Array.from(seriesList).sort()];
 });
+console.log("Series Options:", seriesOptions.value);
 const tagOptions = computed(() => {
     const tags = new Set();
     items.value?.forEach(item => item.itags.forEach(tag => tags.add(tag)));
     return ['All', ...Array.from(tags).sort()];
 });
+console.log("Tag Options:", tagOptions.value);
 const filteredItems = computed(() => {
     if (!items.value) return [];
     return items.value.filter(item => {
@@ -240,16 +253,16 @@ const resetFilters = () => {
     filters.tag = 'All';
 };
 
-// --- Export Dropdown Logic (unchanged) ---
+// --- Export Dropdown Logic (Unchanged) ---
 const isExportMenuOpen = ref(false);
 const showPremiumHint = ref(false);
 const exportMenuRef = ref(null);
 onClickOutside(exportMenuRef, () => {
     isExportMenuOpen.value = false;
-    const showPremiumHint = ref(false);
+    showPremiumHint.value = false; // Fix: Reset showPremiumHint on click outside
 });
 
-// --- CLIENT-SIDE EXPORT FUNCTIONS (unchanged) ---
+// --- CLIENT-SIDE EXPORT FUNCTIONS (Unchanged) ---
 const exportToCSV = async () => {
     if (process.server) return;
     if (!isPremiumUser.value) {

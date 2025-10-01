@@ -145,21 +145,31 @@
 import { ref, computed } from 'vue';
 const route = useRoute();
 const router = useRouter();
+definePageMeta({ middleware: 'auth' });
 const docId = route.params.documentId;
-const { user: currentUser } = useAuthUser(); // Use our global auth user
+const currentUser = useStrapiUser();
+const { findOne } = useStrapi();
 const config = useRuntimeConfig();
 
+
+const itemQueryParams = {
+    // Populate all required relations
+    populate: ['userImages', 'manufacturer', 'character', 'series', 'categories', 'itags'],
+    // Filter by the currently logged-in user ID
+    pagination: { pageSize: 2500 }, // Fetch enough for the whole shelf
+    sort: ['createdAt:desc'],
+};
 // --- 1. Fetch ALL page data from our single BFF endpoint ---
-const { data: pageData, pending, error, refresh } = await useAsyncData(
-    `item-page-data-${docId}`,
-    () => $fetch(`/api/items/${docId}`)
+const { data: pageData } = await findOne('items', docId, itemQueryParams
 );
 
-console.log("Fetched page data:", pageData.value);
+console.log("Fetched page data:", pageData);
 
 // --- Computed properties to separate item and comments from the fetched data ---
-const item = computed(() => pageData.value?.item);
-const comments = computed(() => pageData.value?.comments || []);
+const item = computed(() => pageData);
+const comments = computed(() => pageData.comments || []);
+
+console.log("Item details:", item.value);
 
 useHead({ title: () => item.value ? `${item.value.name} | Shelfie` : 'Item | Shelfie' });
 
@@ -170,21 +180,22 @@ const newComment = ref('');
 const activeImageIndex = ref(0);
 
 // --- Computed Properties for Display Logic ---
-const likeCount = computed(() => item.value?.likedBy?.length || 0);
+const likeCount = computed(() => item.value.likedBy?.length || 0);
 
 const isLiked = computed(() => {
-    if (!currentUser.value || !item.value?.likedBy) return false;
+    if (!currentUser.value || !item.value.likedBy) return false;
     return item.value.likedBy.some(u => u.id === currentUser.value.id);
 });
 
 const isOwner = computed(() => {
-    return currentUser.value && item.value?.user && currentUser.value.id === item.value.user.id;
+    return currentUser.value && item.value.user && currentUser.value.id === item.value.user.id;
 });
 
 const getStrapiMedia = (url) => url ? `${config.public.strapi.url}${url}` : null;
 
 const mainImageUrl = computed(() => {
-    if (item.value?.userImages?.length > 0) {
+    console.log("Item images:", item.value.userImages.length);
+    if (item.value.userImages?.length > 0) {
         const activeImage = item.value.userImages[activeImageIndex.value];
         return getStrapiMedia(activeImage.url);
     }
@@ -192,7 +203,7 @@ const mainImageUrl = computed(() => {
 });
 
 const statusBadgeClass = computed(() => {
-    if (!item.value) return 'bg-gray-200 text-gray-800';
+    if (!item) return 'bg-gray-200 text-gray-800';
     switch (item.value.itemStatus) {
         case 'Owned': return 'bg-green-100 text-green-800';
         case 'Wishlist': return 'bg-yellow-100 text-yellow-800';
