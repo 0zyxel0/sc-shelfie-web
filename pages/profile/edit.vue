@@ -1,8 +1,8 @@
 <template>
   <div class="bg-gray-100 min-h-screen">
     <!-- Loading and Error States -->
-    <div v-if="pending || userLoading" class="text-center py-20 text-gray-500">Loading your profile for editing...</div>
-    <div v-else-if="error || !user" class="text-center py-20">
+    <div v-if="loading || !user" class="text-center py-20 text-gray-500">Loading your profile for editing...</div>
+    <div v-else-if="!user" class="text-center py-20">
       <h2 class="text-xl font-semibold text-red-600">Could not load your profile</h2>
       <p class="text-gray-500">Please try logging in again.</p>
     </div>
@@ -49,20 +49,19 @@
               <!-- Username (Read-only) -->
               <div class="mt-6">
                 <label for="username" class="block text-sm font-medium text-gray-700">Username</label>
-                <!-- Use `user.username` from the global user state -->
                 <input type="text" id="username" :value="user.username" disabled class="form-input mt-1 bg-gray-100 cursor-not-allowed">
               </div>
 
               <!-- Email & Verification Status -->
               <div class="mt-6">
                 <label for="email" class="block text-sm font-medium text-gray-700">Email address</label>
-                <!-- Use `user.email` from the global user state -->
                 <input type="email" id="email" :value="user.email" disabled class="form-input mt-1 bg-gray-100 cursor-not-allowed">
 
-                <div v-if="!user.emailVerified" class="mt-2 text-sm text-yellow-800 bg-yellow-100 p-3 rounded-md">
+                <div v-if="!user.confirmed" class="mt-2 text-sm text-yellow-800 bg-yellow-100 p-3 rounded-md">
                   Your email is not verified.
-                  <!-- Re-using `resendEmail` from useAuthUser or define locally if it has specific logic -->
-                  <button type="button" @click="handleResendEmail" class="font-medium underline hover:text-yellow-900">Resend verification email</button>
+                  <button type="button" @click="handleResendEmail" :disabled="resendPending" class="font-medium underline hover:text-yellow-900">
+                    {{ resendPending ? 'Sending...' : 'Resend verification email' }}
+                  </button>
                 </div>
               </div>
 
@@ -91,46 +90,63 @@
 </template>
 
 <script setup>
-// REMOVE: `qs` is now used on the server
-// import qs from 'qs';
+import { reactive, ref, watch } from 'vue';
 
 definePageMeta({ middleware: 'auth' });
 useHead({ title: 'Account Settings | Shelfie' });
 
-// Use your custom composable for auth state
 const user = useStrapiUser();
+const { update, $strapi, findOne } = useStrapi(); // Need update for user entity, and $strapi client for auth action
 const router = useRouter();
 const config = useRuntimeConfig();
 
-// --- 1. Fetch FRESH user data for this page ---
-// We'll use useAsyncData to trigger the `fetchUser` from useAuthUser.
-
-// --- 2. Initialize form state ---
+// --- STATE ---
 const form = reactive({
   displayName: '',
   birthDate: '',
 });
 const profilePictureFile = ref(null);
-const imagePreviewUrl = ref('/avatar-placeholder.png'); // Default placeholder
-const loading = ref(false);
+const imagePreviewUrl = ref('/avatar-placeholder.png');
+const loading = ref(true); // Start loading true until form is initialized
+const resendPending = ref(false);
 const errorMessage = ref(null);
 const ageError = ref(null);
 
-// --- 3. Pre-fill the form once the fresh data is available ---
-// Watch `user.value` from `useAuthUser` instead of `profileData`
-watch(user, (freshUser) => {
+// --- 1. Initialization: Fetch fresh user data and pre-fill form ---
+// We must fetch the user data with the profilePicture populated, as `useStrapiUser`
+// usually only returns a minimal JWT payload by default.
+
+const { data: freshUserData } = await useAsyncData(
+  `user-profile-edit-${user.value?.id}`,
+  async () => {
+    if (!user.value?.id) return null;
+    // Find the user entity and populate the profile picture
+    return await findOne('users', user.value.id, {
+      populate: ['profilePicture']
+    });
+  },
+  { server: true, watch: [() => user.value?.id] }
+);
+
+watch(freshUserData, (freshUser) => {
   if (freshUser) {
+    // Assume user data is sufficiently flat for direct access (as per V5 assumption)
     form.displayName = freshUser.displayName || '';
     form.birthDate = freshUser.birthDate ? new Date(freshUser.birthDate).toISOString().split('T')[0] : '';
 
-    // Adjust for Strapi v4 nested structure: `profilePicture.data.attributes.url`
-    if (freshUser.profilePicture?.data?.attributes?.url) {
-      imagePreviewUrl.value = config.public.strapi.url + freshUser.profilePicture.data.attributes.url;
+    // --- Profile Picture URL Prefixing ---
+    if (freshUser.profilePicture?.url) {
+      // Already fully flattened media object
+      imagePreviewUrl.value = freshUser.profilePicture.url.startsWith('http')
+        ? freshUser.profilePicture.url
+        : config.public.strapi.url + freshUser.profilePicture.url;
     }
+    loading.value = false;
   }
 }, { immediate: true });
 
-// --- 4. Age Verification Logic ---
+
+// --- 2. Age Verification Logic ---
 watch(() => form.birthDate, (newDate) => {
   if (!newDate) {
     ageError.value = 'Birth date is required.';
@@ -144,28 +160,33 @@ watch(() => form.birthDate, (newDate) => {
     age--;
   }
 
-  if (age < 13) { // Changed from 18 to 13 as per comment in template
+  if (age < 13) {
     ageError.value = 'You must be at least 13 years old to use this service.';
   } else {
     ageError.value = null;
   }
-}, { immediate: true }); // Also run on initial load
+}, { immediate: true });
 
-// --- 5. Event Handlers and Submission Logic ---
+// --- 3. File Handler ---
 const onFileChange = (e) => {
   const file = e.target.files[0];
   if (file) {
     profilePictureFile.value = file;
+    // Revoke old URL if necessary, though Vue handles reactivity well
+    if (imagePreviewUrl.value && imagePreviewUrl.value !== '/avatar-placeholder.png') {
+      URL.revokeObjectURL(imagePreviewUrl.value);
+    }
     imagePreviewUrl.value = URL.createObjectURL(file);
   }
 };
 
+// --- 4. Submission Logic (Combined Multipart Update) ---
 const handleUpdate = async () => {
   if (ageError.value) {
     errorMessage.value = "Please correct the errors before saving.";
     return;
   }
-  if (!user.value?.id) { // Ensure user ID is available
+  if (!user.value?.id) {
     errorMessage.value = "User not logged in or ID missing.";
     return;
   }
@@ -174,53 +195,63 @@ const handleUpdate = async () => {
   errorMessage.value = null;
 
   try {
-    const payload = {
+    // A. Construct JSON Payload
+    const jsonPayload = {
       displayName: form.displayName,
       birthDate: form.birthDate,
     };
 
-    if (profilePictureFile.value) {
-      const formData = new FormData();
-      formData.append('files', profilePictureFile.value); // 'files' is Strapi's default field name for uploads
-      // Call your BFF upload endpoint
-      const [uploadedFile] = await $fetch('/api/upload', {
-        method: 'POST',
-        body: formData, // $fetch handles Content-Type for FormData
-      });
-      payload.profilePicture = uploadedFile.id; // Strapi expects the ID of the uploaded file
-    }
+    const formData = new FormData();
+    formData.append('data', JSON.stringify(jsonPayload)); // Append JSON entity data
 
-    // Call your BFF update endpoint
-    await $fetch('/api/profile/update', {
+    // B. Handle File Upload (only if a new file is selected)
+    if (profilePictureFile.value) {
+      // files.<relationName>: 'profilePicture' is the name of the relation field on the User entity
+      formData.append('files.profilePicture', profilePictureFile.value);
+    }
+    // Note: If no file is selected, the file field is skipped, and the JSON data updates the text fields.
+
+    // C. Execute Multipart PUT request to update the user entity
+    const updatedUser = await client(`/users/${user.value.id}`, {
       method: 'PUT',
-      // No need for 'Content-Type': 'application/json' here, $fetch adds it for plain objects
-      body: payload, // Send the payload object
+      body: formData,
     });
 
-    await fetchUser(); // IMPORTANT: Re-fetch the global user state to get updated profile data
-    router.push('/profile');
+    // D. Success Handling: Update global user state (assuming useStrapiUser has a refresh mechanism)
+    // For now, we manually refresh the data fetched on this page and rely on the next page load.
+    // If you have a global refresh function on useStrapiUser (e.g., `refreshUser`), call it here.
+
+    router.push('/profile'); // Redirect to view profile
 
   } catch (e) {
-    errorMessage.value = e.data?.statusMessage || "Failed to update profile. Please try again.";
-    console.error("Profile update error:", e);
+    errorMessage.value = e.response?.data?.error?.message || "Failed to update profile. Please try again.";
+    console.error("Profile update error:", e.response?.data || e);
   } finally {
     loading.value = false;
   }
 };
 
+// --- 5. Resend Email Logic (Auth Service) ---
 const handleResendEmail = async () => {
-  // You can either create a local resendStatus ref and logic similar to `auth.vue`
-  // or use a resendEmail function if you add one to your `useAuthUser` composable.
-  // For now, let's keep it simple and directly call the BFF route here:
+  if (resendPending.value || !user.value?.email) return;
+
+  resendPending.value = true;
+  errorMessage.value = null;
+
   try {
-    // Calling the BFF endpoint directly
-    await $fetch('/api/profile/resend-verification-email', {
+    // Strapi Auth service endpoint for email confirmation
+    await $strapi.request({
+      url: '/auth/send-email-confirmation',
       method: 'POST',
+      body: { email: user.value.email }
     });
-    alert('A new verification email has been sent!');
+    alert('A new verification email has been sent! Check your inbox.');
+
   } catch (e) {
-    alert(e.data?.statusMessage || 'Failed to send verification email. Please try again later.');
+    errorMessage.value = 'Failed to send verification email. Please try again later.';
     console.error("Resend verification email error:", e);
+  } finally {
+    resendPending.value = false;
   }
 };
 </script>

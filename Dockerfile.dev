@@ -11,17 +11,13 @@ WORKDIR /app
 COPY package.json yarn.lock* ./
 
 # --- FIX: Use yarn to install dependencies ---
-RUN yarn install
-
-# This is optional but can help with native dependencies on Alpine
-# If you don't have issues, you can remove it.
-RUN yarn add esbuild
+RUN npm install
 
 # --- REMOVED: No need to copy source code here ---
 # The source code will be mounted via the volume in docker-compose.yml
-# COPY . .
+COPY . .
 
 EXPOSE 3000
 
 # ✅ Command is now consistent with the installation method
-CMD ["yarn", "dev", "--host", "0.0.0.0"]
+CMD ["npm", "run", "dev"]

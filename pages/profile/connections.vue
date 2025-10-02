@@ -29,9 +29,8 @@
             </div>
 
             <!-- Content Display -->
-            <!-- Use `userLoading` from useAuthUser for overall loading state -->
-            <div v-if="userLoading" class="text-center text-gray-500">Loading connections...</div>
-            <div v-else-if="!user" class="text-center text-gray-500">You must be logged in to view connections.</div>
+            <div v-if="pending" class="text-center text-gray-500">Loading connections...</div>
+            <div v-else-if="!currentUser" class="text-center text-gray-500">You must be logged in to view connections.</div>
 
             <div v-else>
                 <!-- Following List -->
@@ -61,7 +60,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue'; // Explicitly import Vue refs/computed/watch
+import { ref, computed, watch } from 'vue';
 
 definePageMeta({ middleware: 'auth' });
 useHead({ title: 'My Connections | Shelfie' });
@@ -69,29 +68,90 @@ useHead({ title: 'My Connections | Shelfie' });
 const route = useRoute();
 const activeTab = ref(route.query.tab || 'following'); // Default to 'following' tab
 
-// --- Use your custom composable for authentication and user data ---
-const { user, isLoading: userLoading, fetchUser } = useAuthUser();
-// No need for config here, as UserListItem now handles it internally
-// const config = useRuntimeConfig();
+const currentUser = useStrapiUser();
+const { findOne } = useStrapi();
 
-// --- Ensure user data is loaded ---
-// This will trigger the `useAuthUser().fetchUser()` if `user.value` is null,
-// ensuring `user.following` and `user.followers` are populated via the BFF endpoint.
-await useAsyncData(
-    'connections-initial-user-fetch',
+
+// --- Data Fetch: Current User Connections ---
+
+const { data: connectionData, pending } = await useAsyncData(
+    'my-connections',
     async () => {
-        if (!user.value) {
-            await fetchUser();
-        }
+        const userId = currentUser.value?.id;
+        if (!userId) return null;
+
+        // Fetch user data, populating both sides of the relationship
+        const response = await findOne('users', userId, {
+            // Populate following (users this user tracks) and followers (users tracking this user)
+            populate: {
+                following: ['profilePicture'], // Populate fields needed for UserListItem
+                followers: ['profilePicture'],
+            },
+        });
+
+        return response;
     },
-    { server: true, lazy: true } // `lazy: true` means it won't block navigation if data is already there
+    {
+        transform: (response) => {
+            if (!response) return { following: [], followers: [] };
+
+            // Helper to handle fully flattened relations array (as per strict V5 assumption)
+            const getFlattenedUsers = (relation) => {
+                if (relation?.data) {
+                    // Standard Strapi V5 many-relation format
+                    return relation.data.map(u => ({
+                        id: u.id,
+                        // Assume full attributes are flattened into the root object if not in V5 format
+                        username: u.attributes.username,
+                        displayName: u.attributes.displayName,
+                        profilePicture: u.attributes.profilePicture || null,
+                    }));
+                } else if (Array.isArray(relation)) {
+                    // Fully flattened V5 assumption (response array contains user objects)
+                    return relation.map(u => ({
+                        id: u.id,
+                        username: u.username,
+                        displayName: u.displayName,
+                        // Use the exact URL for profile picture
+                        profilePicture: u.profilePicture ? { url: u.profilePicture.url } : null,
+                    }));
+                }
+                return [];
+            };
+
+
+            // If the Strapi Nuxt module is configured for full flattening:
+            const following = getFlattenedUsers(response.following || response.following?.data);
+            const followers = getFlattenedUsers(response.followers || response.followers?.data);
+
+
+            // If the user object itself is returned (not wrapped in attributes):
+            const userEntity = response.data || response;
+
+            // If the user object is NOT wrapped in attributes, try to access relations directly
+            // and assume they are arrays of user objects
+            const followingUsers = userEntity.following || [];
+            const followerUsers = userEntity.followers || [];
+
+            return {
+                // If the strict V5 assumption holds, followingUsers and followerUsers are arrays of users
+                following: getFlattenedUsers(followingUsers),
+                followers: getFlattenedUsers(followerUsers),
+            };
+
+        },
+        watch: [() => currentUser.value?.id],
+        server: true
+    }
 );
 
-// --- Derive connections from the global user state ---
-const connections = computed(() => ({
-    following: user.value?.following || [],
-    followers: user.value?.followers || [],
-}));
+
+// --- Derive connections from the fetched data ---
+const connections = computed(() => connectionData.value || {
+    following: [],
+    followers: [],
+});
+
 
 // Update activeTab if route query changes
 watch(() => route.query.tab, (newTab) => {
@@ -99,8 +159,6 @@ watch(() => route.query.tab, (newTab) => {
         activeTab.value = newTab;
     }
 }, { immediate: true });
-
-// REMOVED: The inline UserListItem definition
 </script>
 
 <style scoped>

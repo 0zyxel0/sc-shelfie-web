@@ -1,5 +1,3 @@
-// /pages/go-premium.vue (Full, Corrected Code)
-
 <template>
     <div class="bg-gray-100">
         <main class="container mx-auto max-w-4xl py-12 px-4 text-center">
@@ -62,16 +60,20 @@ const isLoading = ref(false);
 const paymentError = ref(null);
 const paymentStatus = ref(null);
 const route = useRoute();
-const { user } = useAuthUser();
+// We use useStrapiUser for consistency, assuming its reactivity is reliable
+const user = useStrapiUser();
 
 onMounted(() => {
-    // This part remains the same, but it's now less relevant as we don't get query params.
-    // It's good to keep in case you ever want to link directly to this page with a message.
     if (route.query.status === 'success') {
         paymentStatus.value = 'success';
+        // TODO: Here you would call another secure server route to finalize the payment 
+        // and update the user's subscription in Strapi, potentially using the
+        // checkoutSessionId stored in sessionStorage.
     } else if (route.query.status === 'cancelled') {
         paymentStatus.value = 'cancelled';
     }
+    // Clean up session storage after reading/processing
+    sessionStorage.removeItem('paymongo_checkout_session_id');
 });
 
 const handleGoPremium = async () => {
@@ -85,15 +87,18 @@ const handleGoPremium = async () => {
     }
 
     try {
+        // --- RETAINING $fetch FOR SECURE SERVER ORCHESTRATION ---
+        // This MUST remain a server-side call as it involves private API keys.
         const response = await $fetch('/api/paymongo/create-checkout', {
             method: 'POST',
         });
+        // --------------------------------------------------------
 
         if (response.checkoutUrl && response.checkoutSessionId) {
-            // --- FIX: Store the session ID in sessionStorage BEFORE redirecting ---
+            // Store the session ID BEFORE redirecting
             sessionStorage.setItem('paymongo_checkout_session_id', response.checkoutSessionId);
 
-            // Now, redirect the user
+            // Redirect the user
             window.location.href = response.checkoutUrl;
         } else {
             throw new Error("Could not retrieve a valid checkout URL and Session ID.");
@@ -101,7 +106,8 @@ const handleGoPremium = async () => {
 
     } catch (e) {
         console.error("Payment initiation failed:", e);
-        paymentError.value = e.data?.statusMessage || "An unexpected error occurred. Please try again.";
+        // Handle server-side errors returned by the Nitro route
+        paymentError.value = e.data?.statusMessage || e.message || "An unexpected error occurred. Please try again.";
         isLoading.value = false;
     }
 };
