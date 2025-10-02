@@ -184,7 +184,7 @@ const { data: itemsResponse, pending: itemsPending, error: itemsError } = await 
                 transformedItem.userImages = transformedItem.userImages?.length
                     ? transformedItem.userImages.map(img => ({
                         id: img.id,
-                        url: config.public.strapi.url + img.url,
+                        url: img.url,
                     }))
                     : [];
                 return transformedItem;

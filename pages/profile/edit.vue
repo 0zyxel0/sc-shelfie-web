@@ -98,26 +98,12 @@ definePageMeta({ middleware: 'auth' });
 useHead({ title: 'Account Settings | Shelfie' });
 
 // Use your custom composable for auth state
-const { user, isLoading: userLoading, fetchUser } = useAuthUser();
+const user = useStrapiUser();
 const router = useRouter();
 const config = useRuntimeConfig();
 
 // --- 1. Fetch FRESH user data for this page ---
 // We'll use useAsyncData to trigger the `fetchUser` from useAuthUser.
-// This ensures the global user state (`user` from useAuthUser) is fresh.
-const { pending, error } = await useAsyncData(
-  'profile-edit-data',
-  async () => {
-    // If user is not yet populated (e.g., direct navigation or refresh), fetch it.
-    // The `fetchUser` from `useAuthUser` already calls `/api/profile/me`.
-    // We can also pass populate options here directly if needed by the specific API route.
-    if (!user.value) {
-      await fetchUser(); // This will use the /api/profile/me BFF endpoint
-    }
-  },
-  { server: true } // Ensure this runs on both client and server for SSR
-);
-
 
 // --- 2. Initialize form state ---
 const form = reactive({

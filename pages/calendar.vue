@@ -75,21 +75,47 @@ useHead({ title: 'Upcoming Pre-orders | Shelfie' });
 
 const currentUser = useStrapiUser();
 const config = useRuntimeConfig();
+const { find } = useStrapi();
 
 // --- Simplified Data Fetch ---
 // A single call to our new, dedicated BFF endpoint.
 const { data: upcomingItems, pending, error } = await useAsyncData(
     `pre-order-list-${currentUser.value?.id}`,
-    () => {
+    async () => {
         if (!currentUser.value?.id) {
             return Promise.resolve([]);
         }
-        return $fetch('/api/calendar');
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const todayISO = today.toISOString();
+
+        const query =
+        {
+            filters: {
+                user: { id: { $eq: currentUser.id } },
+                itemStatus: { $eq: "Pre-ordered" },
+                // `$gte` means "greater than or equal to"
+                purchaseDate: { $gte: todayISO },
+            },
+            populate: {
+                userImages: { fields: ["url"] }, // Only need the URL for the image
+            },
+            sort: "purchaseDate:asc", // Sort by the closest release date first
+            "pagination[pageSize]": 500,
+        };
+
+        const itemResponse = await find('items', query);
+
+        console.log('Pre-order query:', query);
+        console.log('Pre-order response:', itemResponse);
+
+        return itemResponse.data
     },
     {
         // The data comes back already filtered and sorted from the server,
         // so no complex transform or computed properties are needed.
-        watch: [() => currentUser.value?.id]
+        watch: [() => currentUser.value?.id],
+        server: true
     }
 );
 

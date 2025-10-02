@@ -49,11 +49,11 @@ const likeCount = computed(() => props.item.likedBy?.length || 0);
 
 const imageUrl = computed(() => {
     const url = props.item.userImages?.[0]?.url;
-    return url ? `${config.public.strapi.url}${url}` : null;
+    return url ? `${url}` : null;
 });
 
 const userAvatarUrl = computed(() => {
     const url = props.item.user?.profilePicture?.url;
-    return url ? `${config.public.strapi.url}${url}` : '/avatar-placeholder.png';
+    return url ? `${url}` : '/avatar-placeholder.png';
 });
 </script>

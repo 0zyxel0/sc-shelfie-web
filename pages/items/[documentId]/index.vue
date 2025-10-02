@@ -191,7 +191,7 @@ const isOwner = computed(() => {
     return currentUser.value && item.value.user && currentUser.value.id === item.value.user.id;
 });
 
-const getStrapiMedia = (url) => url ? `${config.public.strapi.url}${url}` : null;
+const getStrapiMedia = (url) => url ? `${url}` : null;
 
 const mainImageUrl = computed(() => {
     console.log("Item images:", item.value.userImages.length);
