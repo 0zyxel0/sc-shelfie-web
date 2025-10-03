@@ -1,0 +1,23 @@
+# /sc-shelfie-web/Dockerfile.dev
+
+FROM node:20-alpine
+
+# Enable corepack to use yarn
+RUN corepack enable
+
+WORKDIR /app
+
+# Copy package files first for layer caching
+COPY package.json yarn.lock* ./
+
+# --- FIX: Use yarn to install dependencies ---
+RUN npm install
+
+# --- REMOVED: No need to copy source code here ---
+# The source code will be mounted via the volume in docker-compose.yml
+COPY . .
+
+EXPOSE 3000
+
+# ✅ Command is now consistent with the installation method
+CMD ["npm", "run", "dev"]

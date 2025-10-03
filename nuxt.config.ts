@@ -5,23 +5,33 @@ export default defineNuxtConfig({
   modules: ["@nuxtjs/tailwindcss", "@nuxtjs/strapi"],
   strapi: {
     // This URL should point to your Strapi v5 backend
-    url: process.env.STRAPI_API_URL,
+    url: process.env.NUXT_PUBLIC_STRAPI_URL || "http://localhost:1337",
+    server: {
+      url: process.env.STRAPI_URL || "http://strapi-app:1337",
+    },
     user: {
       // Tell the module to populate the 'profilePicture' relation
       populate: ["profilePicture"],
       // This is a good default to ensure data is always fresh on login/refresh
       fetchOnLogin: true,
     },
-    prefix: '/api',
-    admin: '/admin',
-    version: 'v5',
+    prefix: "/api",
+    admin: "/admin",
+    version: "v5",
     cookie: {
-      path: '/',
+      path: "/",
       maxAge: 14 * 24 * 60 * 60,
-      secure: process.env.NODE_ENV === 'production',
+      secure: process.env.NODE_ENV === "production",
       sameSite: true,
     },
-    cookieName: 'auth_token',
+    cookieName: "auth_token",
+  },
+  vite: {
+    server: {
+      watch: {
+        usePolling: true,
+      },
+    },
   },
   app: {
     head: {
@@ -46,7 +56,7 @@ export default defineNuxtConfig({
     public: {
       paymongoPublicKey: process.env.PAYMONGO_PUBLIC_KEY,
       strapi: {
-        url: process.env.STRAPI_API_URL,
+        url: process.env.NUXT_PUBLIC_STRAPI_URL,
       },
       publicSiteUrl: process.env.NUXT_PUBLIC_SITE_URL || "http://localhost:3000",
       // Add this block for Meilisearch

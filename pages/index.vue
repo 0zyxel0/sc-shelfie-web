@@ -11,7 +11,7 @@
             All Items
           </button>
           <!-- Tag Buttons -->
-          <button v-for="tag in tags" :key="tag.id" @click="activeTag = tag.name" :class="[...tagButtonBaseClasses, activeTag === tag.name ? tagButtonActiveClasses : tagButtonInactiveClasses]">
+          <button v-for="tag in sortedTags" :key="tag.id" @click="activeTag = tag.name" :class="[...tagButtonBaseClasses, activeTag === tag.name ? tagButtonActiveClasses : tagButtonInactiveClasses]">
             {{ tag.name }}
           </button>
         </div>
@@ -20,7 +20,8 @@
 
     <!-- Main Content Grid -->
     <main class="container mx-auto py-8 px-4">
-      <div v-if="itemsPending || tagsPending" class="text-center text-gray-500">Loading...</div>
+      <!-- NOTE: Changed the loading condition to use the `pending` computed property -->
+      <div v-if="pending" class="text-center text-gray-500">Loading...</div>
       <div v-else-if="!filteredItems || filteredItems.length === 0" class="text-center text-gray-500 py-20">
         <h3 class="text-2xl font-semibold">No results found</h3>
         <p v-if="activeTag" class="mt-2">Try clearing the filter or exploring other tags.</p>
@@ -34,86 +35,120 @@
   </div>
 </template>
 
-<script setup>
-import qs from 'qs';
-useHead({ title: 'Home | Shelfie' });
+<script>
+// Import child components explicitly
+import ShowcaseCard from '@/components/ShowcaseCard.vue';
 
-const config = useRuntimeConfig();
-const activeTag = ref(null);
-
-// --- DATA FETCHING (Using separate, stable useAsyncData calls) ---
-const { data: items, pending: itemsPending } = await useAsyncData(
-  'homepage-items',
-  async () => {
-    const query = qs.stringify({
-      filters: { isPrivate: { $eq: false } },
-      populate: '*',
-      pagination: { pageSize: 100 },
-      sort: 'createdAt:desc',
-    }, { encodeValuesOnly: true });
-    const response = await $fetch(`${config.public.strapi.url}/api/items?${query}`);
-    console.log("Fetched items:", response);
-    return response.data;
+export default {
+  // Register child components
+  components: {
+    ShowcaseCard,
   },
-  {
-    // The proven transform function to flatten data
-    transform: (response) => {
-      console.log("Transforming items:", response);
-      if (!response) return [];
-      return response.map(item => {
-        const flatItem = { id: item.id, ...item };
-        // This is a simplified transform that you confirmed works for other pages.
-        // Let's ensure relations are also handled if they're nested.
-        if (flatItem.user?.data) { flatItem.user = { id: flatItem.user.data.id, ...flatItem.user.data }; }
-        if (flatItem.itags?.data) { flatItem.itags = flatItem.itags.data.map(t => ({ id: t.id, ...t })); }
-        return flatItem;
+
+  // Set the page title
+  head() {
+    return {
+      title: 'Home | Shelfie',
+    };
+  },
+
+  // Data fetching hook for server-side rendering
+  async asyncData({ $fetch }) {
+    const config = useRuntimeConfig(); // We still use this composable to get config
+
+    // Fetch items and tags concurrently for better performance
+    const [itemsResponse, sortedTags] = await Promise.all([
+      $fetch('/api/items', {
+        method: 'GET',
+        query: {
+          filters: { isPrivate: { $eq: false } },
+          populate: ['userImages', 'manufacturer', 'character', 'series', 'categories', 'itags'],
+          'pagination[pageSize]': 100,
+          sort: 'createdAt:desc',
+        },
+      }),
+      $fetch('/api/tags/sorted')
+    ]);
+
+    // The same transformation logic as before
+    const transformItems = (response) => {
+      if (!response?.data) return [];
+      return response.data.map(item => {
+        const transformedItem = { id: item.id, ...item };
+        if (transformedItem.manufacturer) transformedItem.manufacturer = transformedItem.manufacturer.name; else transformedItem.manufacturer = null;
+        if (transformedItem.series) transformedItem.series = transformedItem.series.name; else transformedItem.series = null;
+        if (transformedItem.categories?.length) transformedItem.categories = transformedItem.categories.map(cat => cat.name); else transformedItem.categories = [];
+        if (transformedItem.itags?.length) {
+          transformedItem.itags = transformedItem.itags.map(tag => ({
+            id: tag.id,
+            name: tag.name,
+            voteCount: tag.voteCount || 0,
+          }));
+        } else {
+          transformedItem.itags = [];
+        }
+        if (transformedItem.userImages?.length) {
+          transformedItem.userImages = transformedItem.userImages.map(img => ({
+            id: img.id,
+            url: config.public.strapi.url + img.url,
+          }));
+        } else {
+          transformedItem.userImages = [];
+        }
+        return transformedItem;
       });
-    }
-  }
-);
+    };
 
-const { data: tags, pending: tagsPending } = await useAsyncData(
-  'homepage-tags',
-  async () => {
-    const response = await $fetch(`${config.public.strapi.url}/api/itags/top`);
-    return response.data || response || [];
-  }
-);
+    const items = transformItems(itemsResponse);
 
-if (process.client) {
-  watch(items, (newItems) => {
-    console.log('✅ Final Transformed items data:', newItems);
-    if (newItems && newItems.length > 0) {
-      console.log('Example itags:', newItems[0].itags);
-    }
-  }, { immediate: true });
-}
+    // The returned object is merged into the component's data
+    return {
+      items,
+      sortedTags,
+    };
+  },
 
+  // Component's reactive state
+  data() {
+    return {
+      activeTag: null,
+      // `items` and `sortedTags` from asyncData are automatically available here.
+      // We initialize them to null to help our `pending` computed property.
+      items: null,
+      sortedTags: null,
 
-const pending = computed(() => itemsPending.value || tagsPending.value);
+      // Button styles can be defined in data to be accessible in the template
+      tagButtonBaseClasses: [
+        'px-4', 'py-1.5', 'rounded-full', 'text-sm', 'font-semibold',
+        'transition-colors', 'border', 'flex-shrink-0'
+      ],
+      tagButtonActiveClasses: 'bg-blue-600 text-white border-blue-600',
+      tagButtonInactiveClasses: 'bg-white text-gray-600 border-gray-300 hover:bg-gray-100 hover:border-gray-400',
+    };
+  },
 
-// --- THE CORRECTED FILTERING LOGIC ---
-const filteredItems = computed(() => {
-  const allItems = items.value || [];
-  if (!activeTag.value) {
-    return allItems;
-  }
+  // Computed properties to derive state
+  computed: {
+    // A replacement for the `pending` flags from useAsyncData
+    pending() {
+      return !this.items || !this.sortedTags;
+    },
 
-  return allItems.filter(item => {
-    // Check if the item has the `itags` property (which is now a simple array).
-    if (!item.itags || !Array.isArray(item.itags)) {
-      return false;
-    }
-    // Check if any tag in the now-flat array has a name that matches the activeTag.
-    return item.itags.some(tag => tag.name === activeTag.value);
-  });
-});
-
-// Tailwind classes for buttons
-const tagButtonBaseClasses = ['px-4', 'py-1.5', 'rounded-full', 'text-sm', 'font-semibold', 'transition-colors', 'border', 'flex-shrink-0'];
-const tagButtonActiveClasses = 'bg-blue-600 text-white border-blue-600';
-const tagButtonInactiveClasses = 'bg-white text-gray-600 border-gray-300 hover:bg-gray-100 hover:border-gray-400';
+    filteredItems() {
+      if (!this.activeTag) {
+        return this.items;
+      }
+      return this.items.filter(item => {
+        if (!item.itags || !Array.isArray(item.itags)) {
+          return false;
+        }
+        return item.itags.some(tag => tag.name === this.activeTag);
+      });
+    },
+  },
+};
 </script>
+
 <style scoped>
 /* Masonry grid styles (no changes) */
 .masonry-grid {

@@ -29,6 +29,9 @@
                     </select>
                 </div>
 
+                <!-- NOTE: Image handling (previews, removal, upload) is missing from the provided original template,
+                     but normally required here. We focus only on fields present in the template. -->
+
                 <!-- Relations -->
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-4 mb-4">
                     <div>
@@ -107,36 +110,115 @@ definePageMeta({ middleware: 'auth' });
 
 const route = useRoute();
 const router = useRouter();
+// We use docId here as the unique ID for the item entity
 const docId = route.params.documentId;
+
+const { find, findOne, update, destroy } = useStrapi();
+const client = useStrapiClient();
+const user = useStrapiUser();
+
 
 // Reactive state for the form
 const form = reactive({
     name: '', itemStatus: 'Owned', description: '', isPrivate: false, purchasePrice: null, purchaseDate: null, manufacturer: '', character: '', series: '',
-    categories: [],
-    itags: [],
+    categories: [], // Array of strings
+    itags: [],       // Array of strings
+    // We also need to store the current relational IDs for successful updates
+    _manufacturerId: null,
+    _characterId: null,
+    _seriesId: null,
 });
+
 const loading = ref(false);
 const errorMessage = ref(null);
 
-// --- 1. Fetch data from our secure BFF endpoint ---
-const { data: item, pending, error } = await useAsyncData(
+// --- UTILITY FUNCTIONS (Reused from /items/new.vue) ---
+
+const findOrCreateRelation = async (entityType, name) => {
+    if (!name) return null;
+    const cleanName = name.trim();
+
+    const existing = await find(entityType, {
+        filters: { name: { $eqi: cleanName } },
+        pagination: { limit: 1 }
+    });
+
+    if (existing?.data?.length > 0) {
+        return existing.data[0].id; // Return numerical ID
+    }
+
+    const newEntity = await client(`${entityType}`, {
+        method: 'POST',
+        body: { data: { name: cleanName } }
+    });
+
+    return newEntity?.data?.id; // Return numerical ID
+};
+
+
+// --- 1. Fetch data from Strapi ---
+const { data: itemResponse, pending, error } = await useAsyncData(
     `item-edit-${docId}`,
-    () => $fetch(`/api/items/${docId}/edit`)
+    () => findOne('items', docId, {
+        populate: ['manufacturer', 'character', 'series', 'categories', 'itags', 'user']
+    }),
+    { server: true }
 );
+
+// Process the raw Strapi response into a single flattened object for the template
+const item = computed(() => {
+    const rawItem = itemResponse.value;
+    if (!rawItem || !rawItem.id) return null;
+
+    // Security check: Ensure the logged-in user owns this item
+    if (user.value?.id !== rawItem.user?.id) {
+        // We cannot throw in a computed, but we can return null/handle in the template
+        console.error("Access Denied: User does not own this item.");
+        return null;
+    }
+
+    // Flatten relations (assuming V5 strict flattening)
+    return {
+        id: rawItem.id,
+        name: rawItem.name,
+        itemStatus: rawItem.itemStatus,
+        description: rawItem.description,
+        isPrivate: rawItem.isPrivate,
+        purchasePrice: rawItem.purchasePrice,
+        purchaseDate: rawItem.purchaseDate,
+
+        // Relations: Flatten to name or name + ID for internal storage
+        manufacturer: rawItem.manufacturer ? { name: rawItem.manufacturer.name, id: rawItem.manufacturer.id } : null,
+        character: rawItem.character ? { name: rawItem.character.name, id: rawItem.character.id } : null,
+        series: rawItem.series ? { name: rawItem.series.name, id: rawItem.series.id } : null,
+
+        categories: rawItem.categories?.length ? rawItem.categories.map(c => ({ name: c.name, id: c.id })) : [],
+        itags: rawItem.itags?.length ? rawItem.itags.map(t => ({ name: t.name, id: t.id })) : [],
+    };
+});
+
 
 // --- 2. Pre-fill the form once the data is fetched ---
 watch(item, (newItem) => {
     if (newItem) {
         const formatDateForInput = (dateString) => dateString ? new Date(dateString).toISOString().split('T')[0] : null;
+
         form.name = newItem.name || '';
         form.itemStatus = newItem.itemStatus || 'Owned';
         form.description = newItem.description || '';
         form.isPrivate = newItem.isPrivate || false;
         form.purchasePrice = newItem.purchasePrice;
         form.purchaseDate = formatDateForInput(newItem.purchaseDate);
+
+        // Pre-fill text inputs and store existing IDs
         form.manufacturer = newItem.manufacturer?.name || '';
+        form._manufacturerId = newItem.manufacturer?.id || null;
         form.character = newItem.character?.name || '';
+        form._characterId = newItem.character?.id || null;
         form.series = newItem.series?.name || '';
+        form._seriesId = newItem.series?.id || null;
+
+        // Pre-fill TagInput arrays (just names)
         form.categories = (newItem.categories || []).map(c => c.name);
         form.itags = (newItem.itags || []).map(t => t.name);
     }
@@ -144,27 +226,62 @@ watch(item, (newItem) => {
 
 useHead({ title: () => item.value ? `Editing: ${item.value.name}` : 'Edit Item' });
 
+
 // --- 3. Handle the UPDATE request ---
 const handleUpdate = async () => {
+    if (!item.value) return;
+
     loading.value = true;
     errorMessage.value = null;
+
     try {
-        // The payload now includes the numerical `id` which the BFF endpoint needs.
-        const payload = {
-            itemId: item.value.documentId || item.value.id,
-            ...form
+        // A. Resolve Relations: We only need to check/create if the string name changed
+        const [
+            manufacturerId,
+            characterId,
+            seriesId,
+            categoryIds,
+            tagIds
+        ] = await Promise.all([
+            // Use existing ID if name hasn't changed, otherwise find/create new
+            form.manufacturer === item.value.manufacturer?.name ? item.value.manufacturer.id : findOrCreateRelation('manufacturers', form.manufacturer),
+            form.character === item.value.character?.name ? item.value.character.id : findOrCreateRelation('characters', form.character),
+            form.series === item.value.series?.name ? item.value.series.id : findOrCreateRelation('serieses', form.series),
+
+            // Categories/Tags require finding/creating ALL tags/categories in the current form array
+            Promise.all(form.categories.map(c => findOrCreateRelation('categories', c))),
+            Promise.all(form.itags.map(t => findOrCreateRelation('itags', t)))
+        ]);
+
+
+        // B. Construct Final JSON Payload
+        const updatePayload = {
+            name: form.name,
+            itemStatus: form.itemStatus,
+            description: form.description,
+            isPrivate: form.isPrivate,
+            purchasePrice: form.purchasePrice,
+            purchaseDate: form.purchaseDate,
+
+            // Relational IDs
+            manufacturer: manufacturerId,
+            character: characterId,
+            series: seriesId,
+            categories: categoryIds.filter(Boolean),
+            itags: tagIds.filter(Boolean),
+
+            // NOTE: If you added image editing later, it would involve a multipart request here, 
+            // similar to `/profile/edit.vue` or a dedicated upload step followed by this PUT.
         };
 
-        await $fetch('/api/items/update', {
-            method: 'PUT',
-            body: payload
-        });
+        // C. Execute the PUT request
+        await update('items', docId, { data: updatePayload });
 
-        // Redirect back to the item page using the string `documentId`
+        // Redirect back to the item page
         router.push(`/items/${docId}`);
     } catch (e) {
-        errorMessage.value = e.data?.statusMessage || "Failed to update item.";
-        console.error(e);
+        errorMessage.value = e.response?.data?.error?.message || "Failed to update item.";
+        console.error(e.response?.data || e);
     } finally {
         loading.value = false;
     }
@@ -176,18 +293,14 @@ const handleDelete = async () => {
         loading.value = true;
         errorMessage.value = null;
         try {
-            await $fetch('/api/items/delete', {
-                method: 'DELETE',
-                body: {
-                    // Send the numerical `id` to the BFF endpoint for deletion
-                    itemId: item.value.documentId || item.value.id
-                }
-            });
+            // Execute the DELETE request using the item ID
+            await destroy('items', docId);
+
             // Redirect to the personal shelf after deletion
             router.push('/my-shelf');
         } catch (e) {
-            errorMessage.value = e.data?.statusMessage || "Failed to delete item.";
-            console.error(e);
+            errorMessage.value = e.response?.data?.error?.message || "Failed to delete item.";
+            console.error(e.response?.data || e);
         } finally {
             loading.value = false;
         }

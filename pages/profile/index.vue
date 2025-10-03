@@ -112,23 +112,10 @@ definePageMeta({ middleware: 'auth' });
 // The actual token logic is now HttpOnly cookie on the server.
 const { logout } = useStrapiAuth();
 
-const { user, isLoading: userLoading, logoutUser } = useAuthUser();
+const user = useStrapiUser();
 
-// If user hasn't been fetched yet (e.g., first SSR load), ensure it's fetched.
-// This useAsyncData call will trigger `fetchUser` from `useAuthUser` on the server
-// and hydrate the `user` state.
-await useAsyncData(
-  'initial-auth-user-fetch',
-  async () => {
-    // The `useAuthUser().fetchUser()` handles calling `/api/profile/me`
-    // If `user.value` is already populated (from `useState` during SSR), this will be quick.
-    if (!user.value) {
-      await useAuthUser().fetchUser();
-    }
-    // No need to return anything, as `useAuthUser().user` is already reactive
-  },
-  { server: true, lazy: true } // `lazy:true` can prevent blocking, but ensure `user` is null if fetch fails
-);
+const { find } = useStrapi();
+const { client } = useStrapiClient();
 const router = useRouter();
 const config = useRuntimeConfig();
 useHead({
@@ -147,7 +134,7 @@ const { data: userItems, pending: itemsPending } = await useAsyncData(
       sort: 'createdAt:desc',
     };
 
-    return await $fetch('/api/profile/items', {
+    return await find('items', {
       method: 'GET',
       query: queryParams,
     });
@@ -164,8 +151,8 @@ const { data: userItems, pending: itemsPending } = await useAsyncData(
 
 // --- Computed Properties for Display ---
 const profilePictureUrl = computed(() => {
-  if (user.value?.profilePicture?.data?.url) {
-    return user.value.profilePicture.data.url || (config.public.strapi.url + user.value.profilePicture.data.url);
+  if (user.value?.profilePicture?.url) {
+    return user.value.profilePicture.url || (config.public.strapi.url + user.value.profilePicture.url);
   }
   return '/avatar-placeholder.png';
 });
@@ -211,7 +198,7 @@ const resendStatus = ref('idle'); // 'idle', 'sending', 'success', 'error'
 const resendEmail = async () => {
   resendStatus.value = 'sending';
   try {
-    await $fetch('/api/profile/resend-verification-email', { method: 'POST' });
+    await client('/profile/resend-verification-email', { method: 'POST' });
     resendStatus.value = 'success';
     setTimeout(() => { resendStatus.value = 'idle'; }, 5000);
   } catch (e) {
@@ -223,13 +210,13 @@ const resendEmail = async () => {
 
 // --- Update the template's data source ---
 // `user` is now already reactive from `useAuthUser`
-const pending = computed(() => userLoading.value || itemsPending.value);
+const pending = computed(() => itemsPending.value);
 
 // --- Actions ---
 const handleLogout = async () => {
   try {
     // This now calls our enhanced logout function which includes clearNuxtData()
-    await logoutUser();
+    await logout();
   } catch (e) {
     console.error("Logout failed on page:", e);
   } finally {

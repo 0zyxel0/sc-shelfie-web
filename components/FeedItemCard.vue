@@ -41,11 +41,11 @@ const itemLink = computed(() => `/items/${props.item.documentId || props.item.id
 
 const userAvatarUrl = computed(() => {
     const url = props.item.user?.profilePicture?.url;
-    return url ? `${config.public.strapi.url}${url}` : '~assets/img/avatar-placeholder.png';
+    return url ? `${url}` : '~assets/img/avatar-placeholder.png';
 });
 
 const itemImageUrl = computed(() => {
     const url = props.item.userImages[0]?.url;
-    return url ? `${config.public.strapi.url}${url}` : null;
+    return url ? `${url}` : null;
 });
 </script>

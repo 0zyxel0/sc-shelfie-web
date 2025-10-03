@@ -1,5 +1,3 @@
-// /pages/premium/success.vue (Full, Corrected Code)
-
 <template>
     <div class="bg-gray-100 min-h-screen flex items-center justify-center">
         <main class="container mx-auto max-w-lg py-12 px-4 text-center">
@@ -43,24 +41,32 @@
 </template>
 
 <script setup>
+import { ref, onMounted } from 'vue';
+
 useHead({ title: 'Payment Success | Shelfie' });
 
 const router = useRouter();
-const { user, fetchUser } = useAuthUser();
+const user = useStrapiUser(); // Use standard Strapi user composable
+const { refreshUser } = useStrapiAuth(); // Assuming Strapi Auth provides a refresh function
+
 const verificationStatus = ref('pending');
 const errorMessage = ref('');
 
 onMounted(async () => {
-    // --- FIX: Retrieve the session ID from sessionStorage ---
     const sessionId = sessionStorage.getItem('paymongo_checkout_session_id');
 
-    // --- Clean up immediately ---
-    // It's important to remove the key so it can't be re-used.
+    // Clean up immediately
     sessionStorage.removeItem('paymongo_checkout_session_id');
 
+    // 1. Ensure user is loaded (or attempt to load them if state is fresh)
     if (!user.value) {
-        await fetchUser();
+        // Attempt to load the user, which typically happens automatically via middleware/plugin
+        // But we can call refresh explicitly if we suspect the state is stale.
+        if (refreshUser) {
+            await refreshUser();
+        }
     }
+
     if (!user.value) {
         errorMessage.value = "You must be logged in to verify a payment.";
         verificationStatus.value = 'error';
@@ -74,17 +80,23 @@ onMounted(async () => {
     }
 
     try {
+        // 2. Server-Side Verification (MUST remain $fetch to Nitro/Server Route)
         await $fetch('/api/paymongo/verify-payment', {
             method: 'POST',
-            body: { checkoutSessionId: sessionId }
+            body: { checkoutSessionId: sessionId, userId: user.value.id } // Optionally send user ID for verification
         });
 
+        // 3. Success: Refresh user state to get the new "Premium" role/subscription status
+        if (refreshUser) {
+            await refreshUser();
+        }
+
         verificationStatus.value = 'success';
-        await fetchUser(); // Refresh user state to get new "Premium" role
 
     } catch (e) {
         console.error("Payment verification failed:", e);
-        errorMessage.value = e.data?.statusMessage || "An error occurred during verification.";
+        // Safely extract error message
+        errorMessage.value = e.data?.statusMessage || e.message || "An error occurred during verification.";
         verificationStatus.value = 'error';
     }
 });

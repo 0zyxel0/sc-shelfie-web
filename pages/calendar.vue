@@ -29,11 +29,11 @@
             <!-- Upcoming Items List -->
             <div v-else class="bg-white rounded-lg shadow-md overflow-hidden">
                 <ul class="divide-y divide-gray-200">
-                    <li v-for="item in upcomingItems" :key="item.documentId">
-                        <NuxtLink :to="`/items/${item.documentId}`" class="p-4 flex items-center space-x-4 hover:bg-gray-50 transition-colors">
+                    <li v-for="item in upcomingItems" :key="item.id">
+                        <NuxtLink :to="`/items/${item.id}`" class="p-4 flex items-center space-x-4 hover:bg-gray-50 transition-colors">
 
-                            <!-- Corrected Image Source -->
-                            <img v-if="item.userImages && item.userImages[0]?.url" :src="`${config.public.strapi.url}${item.userImages[0].url}`" class="h-24 w-24 rounded-lg object-cover flex-shrink-0 bg-gray-200 shadow">
+                            <!-- Image Source: URL is expected to be correctly prefixed by transform -->
+                            <img v-if="item.userImages && item.userImages[0]?.url" :src="item.userImages[0].url" class="h-24 w-24 rounded-lg object-cover flex-shrink-0 bg-gray-200 shadow">
                             <div v-else class="h-24 w-24 rounded-lg bg-gray-200 flex-shrink-0"></div>
 
                             <div class="flex-1">
@@ -41,7 +41,6 @@
                                 <p class="text-sm text-gray-600 mt-1">
                                     Releases on:
                                     <span class="font-semibold text-gray-800">
-                                        <!-- Changed to releaseDate, adjust if you use purchaseDate -->
                                         {{ new Date(item.purchaseDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) }}
                                     </span>
                                 </p>
@@ -55,7 +54,6 @@
 
                             <!-- Countdown Timer -->
                             <div class="text-right">
-                                <!-- Changed to releaseDate, adjust if you use purchaseDate -->
                                 <p class="text-xl sm:text-2xl font-bold text-blue-600">{{ countdown(item.purchaseDate).days }}</p>
                                 <p class="text-xs text-gray-500">days away</p>
                             </div>
@@ -75,32 +73,78 @@ useHead({ title: 'Upcoming Pre-orders | Shelfie' });
 
 const currentUser = useStrapiUser();
 const config = useRuntimeConfig();
+const { find } = useStrapi();
 
-// --- Simplified Data Fetch ---
-// A single call to our new, dedicated BFF endpoint.
-const { data: upcomingItems, pending, error } = await useAsyncData(
+// --- Data Fetch ---
+const { data: itemsResponse, pending, error } = await useAsyncData(
     `pre-order-list-${currentUser.value?.id}`,
-    () => {
-        if (!currentUser.value?.id) {
-            return Promise.resolve([]);
+    async () => {
+        const userId = currentUser.value?.id;
+        if (!userId) {
+            return Promise.resolve(null);
         }
-        return $fetch('/api/calendar');
+
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const todayISO = today.toISOString();
+
+        const query =
+        {
+            filters: {
+                user: { id: { $eq: userId } },
+                itemStatus: { $eq: "Pre-ordered" },
+                purchaseDate: { $gte: todayISO },
+            },
+            // Note: Since we assume full flattening, we only need 'populate: true' or specific fields.
+            populate: {
+                userImages: { fields: ["url", "name"] },
+            },
+            sort: ['purchaseDate:asc'],
+            pagination: { pageSize: 500 },
+        };
+
+        return await find('items', query);
     },
     {
-        // The data comes back already filtered and sorted from the server,
-        // so no complex transform or computed properties are needed.
-        watch: [() => currentUser.value?.id]
+        transform: (response) => {
+            if (!response?.data) return [];
+
+            // If the Nuxt Strapi plugin is fully flattening, response.data is an array of items.
+            // We only need to ensure the media URLs are correctly prefixed.
+            return response.data.map(item => {
+                // Item is already flattened, e.g., item.name, item.purchaseDate
+                const transformedItem = { id: item.id, ...item };
+
+                // --- Media URL Prefixing ---
+                if (transformedItem.userImages?.length) {
+                    // Assuming userImages is an array of media objects { id, url, name, ... }
+                    transformedItem.userImages = transformedItem.userImages.map(img => ({
+                        id: img.id,
+                        // If the URL is already absolute (e.g., CDN), use it; otherwise, prefix Strapi URL
+                        url: img.url.startsWith('http') ? img.url : config.public.strapi.url + img.url
+                    }));
+                } else {
+                    transformedItem.userImages = [];
+                }
+
+                return transformedItem;
+            });
+        },
+        watch: [() => currentUser.value?.id],
+        server: true
     }
 );
 
-// --- Countdown Utility Function ---
+const upcomingItems = computed(() => itemsResponse.value || []);
+
+
+// --- Countdown Utility Function (Unchanged) ---
 const countdown = (targetDate) => {
     if (!targetDate) return { days: 0 };
     const target = new Date(targetDate).getTime();
     const now = new Date().getTime();
     const difference = target - now;
 
-    // Use `Math.ceil` to ensure that if there's any time left in the day, it counts as a full day.
     const days = Math.ceil(difference / (1000 * 60 * 60 * 24));
 
     return {
