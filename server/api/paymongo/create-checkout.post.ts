@@ -1,9 +1,8 @@
-// /server/api/paymongo/create-checkout.post.ts (Full, Corrected Code)
-
-import { createError, defineEventHandler } from "h3";
+// /server/api/paymongo/create-checkout.post.ts
+import { createError, defineEventHandler, readBody } from "h3";
+import { useStrapiUser } from "#strapi"; // ✅ Nuxt Strapi plugin helper
 
 // --- Server-side source of truth for pricing ---
-// Prices are in the smallest currency unit (centavos for PHP).
 const PLANS = {
   monthly: {
     name: "Shelfie Premium (Monthly)",
@@ -18,26 +17,39 @@ const PLANS = {
 };
 
 export default defineEventHandler(async (event) => {
-  const loggedInUser = await $fetch("/api/auth/me", { headers: event.node.req.headers });
+  // ✅ 1. Get the currently authenticated Strapi user via Nuxt Strapi plugin
+  const loggedInUser = await useStrapiUser(event);
+
   if (!loggedInUser) {
-    throw createError({ statusCode: 401, statusMessage: "Unauthorized. You must be logged in to go premium." });
+    throw createError({
+      statusCode: 401,
+      statusMessage: "Unauthorized. You must be logged in to go premium.",
+    });
   }
 
-  // --- Read the plan selection from the request body ---
-  const { plan } = await readBody(event);
+  // ✅ 2. Parse and validate plan
+  const { plan } = await readBody<{ plan: keyof typeof PLANS }>(event);
   const selectedPlan = PLANS[plan];
 
-  // --- Validate the selected plan ---
   if (!selectedPlan) {
-    throw createError({ statusCode: 400, statusMessage: "Invalid subscription plan selected." });
+    throw createError({
+      statusCode: 400,
+      statusMessage: "Invalid subscription plan selected.",
+    });
   }
 
+  // ✅ 3. Get runtime config
   const config = useRuntimeConfig();
   const paymongoSecretKey = config.paymongoSecretKey;
+
   if (!paymongoSecretKey) {
-    throw createError({ statusCode: 500, statusMessage: "PayMongo secret key is not configured on the server." });
+    throw createError({
+      statusCode: 500,
+      statusMessage: "PayMongo secret key is not configured on the server.",
+    });
   }
 
+  // ✅ 4. Prepare PayMongo request
   const base64ApiKey = Buffer.from(paymongoSecretKey).toString("base64");
   const headers = {
     "Content-Type": "application/json",
@@ -46,19 +58,22 @@ export default defineEventHandler(async (event) => {
   };
 
   try {
+    // ✅ 5. Create checkout session with PayMongo
     const response = await $fetch<{ data: any }>("https://api.paymongo.com/v1/checkout_sessions", {
       method: "POST",
       headers,
       body: {
         data: {
           attributes: {
-            billing: { email: loggedInUser.email, name: loggedInUser.displayName || loggedInUser.username },
+            billing: {
+              email: loggedInUser.email,
+              name: loggedInUser.username || loggedInUser.displayName || loggedInUser.email,
+            },
             send_email_receipt: true,
             show_description: false,
             show_line_items: true,
             line_items: [
               {
-                // --- Use the validated plan details ---
                 currency: selectedPlan.currency,
                 amount: selectedPlan.amount,
                 name: selectedPlan.name,
@@ -68,7 +83,10 @@ export default defineEventHandler(async (event) => {
             payment_method_types: ["card", "gcash", "paymaya", "grab_pay"],
             success_url: `${config.publicSiteUrl}/premium/success`,
             cancel_url: `${config.publicSiteUrl}/premium/cancelled`,
-            metadata: { strapiUserId: loggedInUser.id, plan: plan },
+            metadata: {
+              strapiUserId: loggedInUser.id,
+              plan,
+            },
           },
         },
       },
@@ -76,20 +94,19 @@ export default defineEventHandler(async (event) => {
 
     const checkoutSession = response.data;
     const checkoutUrl = checkoutSession?.attributes?.checkout_url;
-    // --- FIX: Get the session ID ---
     const checkoutSessionId = checkoutSession?.id;
 
     if (!checkoutUrl || !checkoutSessionId) {
       throw new Error("Failed to retrieve checkout URL or Session ID from PayMongo.");
     }
 
-    // --- FIX: Return BOTH the URL and the ID to the client ---
+    // ✅ 6. Return checkout URL and session ID
     return {
       checkoutUrl,
       checkoutSessionId,
     };
   } catch (e: any) {
-    console.error("BFF - PayMongo Checkout Error:", e.response?._data || e.message);
+    console.error("PayMongo Checkout Error:", e.response?._data || e.message);
     throw createError({
       statusCode: e.response?.status || 500,
       statusMessage: e.response?._data?.errors?.[0]?.detail || "Could not create a payment session.",

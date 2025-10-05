@@ -7,7 +7,7 @@ export default defineNuxtConfig({
     // This URL should point to your Strapi v5 backend
     url: process.env.NUXT_PUBLIC_STRAPI_URL || "http://localhost:1337",
     server: {
-      url: process.env.STRAPI_URL || "http://strapi-app:1337",
+      url: process.env.STRAPI_URL || process.env.NUXT_PUBLIC_STRAPI_URL || "http://strapi-app:1337",
     },
     user: {
       // Tell the module to populate the 'profilePicture' relation
@@ -50,13 +50,13 @@ export default defineNuxtConfig({
   runtimeConfig: {
     paymongoSecretKey: process.env.PAYMONGO_SECRET_KEY,
     strapi: {
-      url: process.env.STRAPI_API_URL,
+      url: process.env.STRAPI_API_URL || process.env.NUXT_PUBLIC_STRAPI_URL,
     },
     publicSiteUrl: process.env.NUXT_PUBLIC_SITE_URL || "http://localhost:3000",
     public: {
       paymongoPublicKey: process.env.PAYMONGO_PUBLIC_KEY,
       strapi: {
-        url: process.env.NUXT_PUBLIC_STRAPI_URL,
+        url: process.env.STRAPI_API_URL || process.env.NUXT_PUBLIC_STRAPI_URL,
       },
       publicSiteUrl: process.env.NUXT_PUBLIC_SITE_URL || "http://localhost:3000",
       // Add this block for Meilisearch
