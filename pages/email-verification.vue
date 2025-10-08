@@ -36,7 +36,7 @@ useHead({ title: 'Email Verification | Shelfie' });
 
 const route = useRoute();
 const config = useRuntimeConfig();
-
+const client = useStrapiClient();
 const pending = ref(true);
 const success = ref(false);
 const errorMessage = ref('An unknown error occurred. The link may be invalid or expired.');
@@ -53,7 +53,7 @@ onMounted(async () => {
 
     try {
         // This is the specific Strapi endpoint for email confirmation
-        await $fetch(`${config.public.strapi.url}/api/auth/email-confirmation`, {
+        await client(`/auth/email-confirmation`, {
             method: 'GET',
             params: {
                 confirmation: confirmationToken,

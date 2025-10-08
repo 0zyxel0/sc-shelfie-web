@@ -24,7 +24,7 @@ const runtimeConfig = useRuntimeConfig(); // Access runtimeConfig inside setup
 const profilePictureUrl = computed(() => {
     // Check if profilePicture exists and has a url property (flattened by BFF)
     if (props.user.profilePicture?.url) {
-        return runtimeConfig.public.strapi.url + props.user.profilePicture.url;
+        return props.user.profilePicture.url;
     }
     return '/avatar-placeholder.png'; // Default placeholder
 });

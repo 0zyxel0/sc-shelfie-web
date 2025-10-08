@@ -97,6 +97,7 @@ useHead({ title: 'Account Settings | Shelfie' });
 
 const user = useStrapiUser();
 const { update, $strapi, findOne } = useStrapi(); // Need update for user entity, and $strapi client for auth action
+const client = useStrapiClient();
 const router = useRouter();
 const config = useRuntimeConfig();
 

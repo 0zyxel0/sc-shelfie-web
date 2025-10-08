@@ -1,5 +1,11 @@
 <template>
-    <!-- Your template remains unchanged -->
+    <!-- START: Loading Modal Indicator -->
+    <div v-if="isLoading" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <!-- Spinner -->
+        <div class="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-white"></div>
+    </div>
+    <!-- END: Loading Modal Indicator -->
+
     <div class="min-h-screen flex items-center justify-center bg-gray-100">
         <div class="bg-white p-8 rounded-lg shadow-md w-full max-w-md">
 
@@ -73,7 +79,7 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'; // Ensure computed is imported
+import { ref, computed } from 'vue';
 
 definePageMeta({ layout: false })
 const { login, register } = useStrapiAuth()
@@ -82,9 +88,10 @@ const router = useRouter()
 const username = ref('')
 const email = ref('')
 const password = ref('')
-const confirmPassword = ref('') // New state for confirmation
+const confirmPassword = ref('')
 const isRegisterMode = ref(false)
 const errorMessage = ref(null)
+const isLoading = ref(false) // <-- NEW: State for the loading indicator
 
 // Computed property to check if passwords match
 const passwordMismatch = computed(() => {
@@ -93,26 +100,24 @@ const passwordMismatch = computed(() => {
 
 const handleAuth = async () => {
     errorMessage.value = null
-
-    // Pre-check for registration mode
-    if (isRegisterMode.value) {
-        if (password.value !== confirmPassword.value) {
-            errorMessage.value = 'Password and confirmation password do not match.';
-            return;
-        }
-    }
+    isLoading.value = true; // <-- NEW: Show the loading modal
 
     try {
+        // Pre-check for registration mode
         if (isRegisterMode.value) {
+            if (password.value !== confirmPassword.value) {
+                errorMessage.value = 'Password and confirmation password do not match.';
+                // We return here but the finally block will still execute
+                return;
+            }
+
             // Strapi registration call
             const data = await register({
                 username: username.value,
                 email: email.value,
                 password: password.value
             });
-            // Note: useStrapiAuth's register usually throws if there's an error status code
             if (data.error) {
-                // If it successfully returns an error payload (e.g., validation failed)
                 throw new Error(data.error.message);
             }
             router.push('/profile/edit')
@@ -125,9 +130,12 @@ const handleAuth = async () => {
             }
         }
     } catch (e) {
-        // Handle Strapi errors which are often nested in e.response.data.error
+        // Handle Strapi errors
         errorMessage.value = e.response?.data?.error?.message || e.message || 'An unexpected error occurred during authentication.'
         console.error("Auth Error:", e);
+    } finally {
+        // <-- NEW: Use a finally block to ensure the loader is always hidden
+        isLoading.value = false;
     }
 }
 </script>

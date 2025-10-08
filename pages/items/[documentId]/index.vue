@@ -128,7 +128,7 @@
                         <img :src="getStrapiMedia(comment.user?.profilePicture?.url) || '/avatar-placeholder.png'" class="h-10 w-10 rounded-full object-cover flex-shrink-0">
                         <div class="flex-1">
                             <p class="font-semibold text-gray-800">
-                                <NuxtLink :to="`/users/${comment.user.username}`" class="hover:underline">@{{ comment.user.username }}</NuxtLink>
+                                <NuxtLink :to="`/users/${comment.user?.username}`" class="hover:underline">@{{ comment.user?.username }}</NuxtLink>
                             </p>
                             <div class="prose prose-sm mt-1 max-w-none text-gray-600" v-html="comment.content"></div>
                         </div>
@@ -147,13 +147,13 @@ const router = useRouter();
 definePageMeta({ middleware: 'auth' });
 const docId = route.params.documentId;
 const currentUser = useStrapiUser();
-const { findOne } = useStrapi();
+const { findOne, update, find, create } = useStrapi();
 const config = useRuntimeConfig();
 
 
 const itemQueryParams = {
     // Populate all required relations
-    populate: ['userImages', 'manufacturer', 'character', 'series', 'categories', 'itags'],
+    populate: ['userImages', 'manufacturer', 'character', 'series', 'categories', 'itags', 'likedBy'],
     // Filter by the currently logged-in user ID
     pagination: { pageSize: 2500 }, // Fetch enough for the whole shelf
     sort: ['createdAt:desc'],
@@ -162,11 +162,18 @@ const itemQueryParams = {
 const { data: pageData } = await findOne('items', docId, itemQueryParams
 );
 
+const { data: commentData } = await find('comments', {
+    filters: { item: { documentId: { $eq: docId } } }, // Filter by the numeric item ID
+    populate: { user: { populate: "profilePicture" } },
+    sort: "createdAt:desc",
+}
+);
+
 console.log("Fetched page data:", pageData);
 
 // --- Computed properties to separate item and comments from the fetched data ---
 const item = computed(() => pageData);
-const comments = computed(() => pageData.comments || []);
+const comments = computed(() => commentData || []);
 
 console.log("Item details:", item.value);
 
@@ -225,15 +232,26 @@ const toggleLike = async () => {
             item.value.likedBy.push(currentUser.value);
         }
 
-        // Call the BFF endpoint
-        await $fetch('/api/items/like', {
-            method: 'POST',
-            body: {
-                itemId: item.value.documentId || item.value.id,
-                currentLikes: originalLikedBy.map(u => u.id), // Send original list
-                isLiked: !isLiked.value // Send the action we are taking (the opposite of current state)
-            }
+        const itemResp = await findOne('items', docId, { populate: 'likedBy' });
+        const currentLikes = itemResp.data.likedBy.map(u => u.id);
+        const isAlreadyLiked = currentLikes.includes(currentUser.value.id);
+        const newLikes = isAlreadyLiked
+            ? currentLikes.filter(id => id !== currentUser.value.id)
+            : [...currentLikes, currentUser.value.id];
+
+        await update(`items`, docId, {
+            likedBy: newLikes
         });
+
+        // Call the BFF endpoint
+        // await $fetch('/api/items/like', {
+        //     method: 'POST',
+        //     body: {
+        //         itemId: item.value.documentId || item.value.id,
+        //         currentLikes: originalLikedBy.map(u => u.id), // Send original list
+        //         isLiked: !isLiked.value // Send the action we are taking (the opposite of current state)
+        //     }
+        // });
         // No need to do anything on success, UI is already updated.
     } catch (e) {
         console.error("Failed to toggle like:", e);
@@ -249,12 +267,10 @@ const postComment = async () => {
     if (!newComment.value.trim()) return;
     commentPending.value = true;
     try {
-        await $fetch('/api/items/comment', {
-            method: 'POST',
-            body: {
-                itemId: item.value.documentId || item.value.id,
-                content: newComment.value,
-            }
+        await create('comments', {
+            itemId: item.value.documentId || item.value.id,
+            content: newComment.value,
+            user: currentUser.value.id
         });
         newComment.value = '';
         refresh(); // Refetch all page data to get the new comment

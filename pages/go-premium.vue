@@ -94,7 +94,8 @@ const handleGoPremium = async () => {
         const response = await $fetch('/api/paymongo/create-checkout', {
             method: 'POST',
             body: {
-                plan: selectedPlan.value
+                plan: selectedPlan.value,
+                user: user.value
             }
         });
         // --------------------------------------------------------

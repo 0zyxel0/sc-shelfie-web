@@ -20,8 +20,15 @@
 
     <!-- Main Content Grid -->
     <main class="container mx-auto py-8 px-4">
-      <!-- NOTE: Changed the loading condition to use the `pending` computed property -->
+      <!-- Use the 'pending' state from useAsyncData -->
       <div v-if="pending" class="text-center text-gray-500">Loading...</div>
+
+      <!-- Use the 'error' state from useAsyncData -->
+      <div v-else-if="error" class="text-center text-red-500 py-20">
+        <h3 class="text-2xl font-semibold">Failed to load items</h3>
+        <p class="mt-2">{{ error.message }}</p>
+      </div>
+
       <div v-else-if="!filteredItems || filteredItems.length === 0" class="text-center text-gray-500 py-20">
         <h3 class="text-2xl font-semibold">No results found</h3>
         <p v-if="activeTag" class="mt-2">Try clearing the filter or exploring other tags.</p>
@@ -35,118 +42,70 @@
   </div>
 </template>
 
-<script>
-// Import child components explicitly
+<script setup>
+import { ref, computed } from 'vue';
 import ShowcaseCard from '@/components/ShowcaseCard.vue';
 
-export default {
-  // Register child components
-  components: {
-    ShowcaseCard,
-  },
+// Define page meta and head
+useHead({
+  title: 'Home | Shelfie',
+});
 
-  // Set the page title
-  head() {
-    return {
-      title: 'Home | Shelfie',
-    };
-  },
+// --- Reactive State ---
+const activeTag = ref(null);
+const { find } = useStrapi();
 
-  // Data fetching hook for server-side rendering
-  async asyncData({ $fetch }) {
-    const config = useRuntimeConfig(); // We still use this composable to get config
+// --- Data Fetching with useAsyncData ---
+const { data, pending, error } = await useAsyncData('home-page-data', async () => {
+  // Fetch items and tags concurrently
+  const [itemsResponse, tagsResponse] = await Promise.all([
+    find('items', {
+      filters: { isPrivate: { $eq: false } },
+      populate: {
+        userImages: true,
+        manufacturer: true,
+        character: true,
+        series: true,
+        categories: true,
+        itags: true,
+      },
+      pagination: { pageSize: 100 },
+      sort: 'createdAt:desc',
+    }),
+    find('itags', {
+      sort: ["voteCount:desc", "name:asc"],
+      pagination: { limit: 50 },
+      fields: ["name", "voteCount"],
+    })
+  ]);
 
-    // Fetch items and tags concurrently for better performance
-    const [itemsResponse, sortedTags] = await Promise.all([
-      $fetch('/api/items', {
-        method: 'GET',
-        query: {
-          filters: { isPrivate: { $eq: false } },
-          populate: ['userImages', 'manufacturer', 'character', 'series', 'categories', 'itags'],
-          'pagination[pageSize]': 100,
-          sort: 'createdAt:desc',
-        },
-      }),
-      $fetch('/api/tags/sorted')
-    ]);
+  return {
+    items: itemsResponse.data || [],
+    tags: tagsResponse.data || [],
+  };
+});
 
-    // The same transformation logic as before
-    const transformItems = (response) => {
-      if (!response?.data) return [];
-      return response.data.map(item => {
-        const transformedItem = { id: item.id, ...item };
-        if (transformedItem.manufacturer) transformedItem.manufacturer = transformedItem.manufacturer.name; else transformedItem.manufacturer = null;
-        if (transformedItem.series) transformedItem.series = transformedItem.series.name; else transformedItem.series = null;
-        if (transformedItem.categories?.length) transformedItem.categories = transformedItem.categories.map(cat => cat.name); else transformedItem.categories = [];
-        if (transformedItem.itags?.length) {
-          transformedItem.itags = transformedItem.itags.map(tag => ({
-            id: tag.id,
-            name: tag.name,
-            voteCount: tag.voteCount || 0,
-          }));
-        } else {
-          transformedItem.itags = [];
-        }
-        if (transformedItem.userImages?.length) {
-          transformedItem.userImages = transformedItem.userImages.map(img => ({
-            id: img.id,
-            url: config.public.strapi.url + img.url,
-          }));
-        } else {
-          transformedItem.userImages = [];
-        }
-        return transformedItem;
-      });
-    };
+// --- Computed Properties ---
+// Safely access fetched data with fallbacks
+const allItems = computed(() => data.value?.items || []);
+const sortedTags = computed(() => data.value?.tags || []);
 
-    const items = transformItems(itemsResponse);
+const filteredItems = computed(() => {
+  if (!activeTag.value) {
+    return allItems.value;
+  }
+  return allItems.value.filter(item =>
+    item.itags?.some(tag => tag.name === activeTag.value)
+  );
+});
 
-    // The returned object is merged into the component's data
-    return {
-      items,
-      sortedTags,
-    };
-  },
-
-  // Component's reactive state
-  data() {
-    return {
-      activeTag: null,
-      // `items` and `sortedTags` from asyncData are automatically available here.
-      // We initialize them to null to help our `pending` computed property.
-      items: null,
-      sortedTags: null,
-
-      // Button styles can be defined in data to be accessible in the template
-      tagButtonBaseClasses: [
-        'px-4', 'py-1.5', 'rounded-full', 'text-sm', 'font-semibold',
-        'transition-colors', 'border', 'flex-shrink-0'
-      ],
-      tagButtonActiveClasses: 'bg-blue-600 text-white border-blue-600',
-      tagButtonInactiveClasses: 'bg-white text-gray-600 border-gray-300 hover:bg-gray-100 hover:border-gray-400',
-    };
-  },
-
-  // Computed properties to derive state
-  computed: {
-    // A replacement for the `pending` flags from useAsyncData
-    pending() {
-      return !this.items || !this.sortedTags;
-    },
-
-    filteredItems() {
-      if (!this.activeTag) {
-        return this.items;
-      }
-      return this.items.filter(item => {
-        if (!item.itags || !Array.isArray(item.itags)) {
-          return false;
-        }
-        return item.itags.some(tag => tag.name === this.activeTag);
-      });
-    },
-  },
-};
+// --- Constants for Styling ---
+const tagButtonBaseClasses = [
+  'px-4', 'py-1.5', 'rounded-full', 'text-sm', 'font-semibold',
+  'transition-colors', 'border', 'flex-shrink-0'
+];
+const tagButtonActiveClasses = 'bg-blue-600 text-white border-blue-600';
+const tagButtonInactiveClasses = 'bg-white text-gray-600 border-gray-300 hover:bg-gray-100 hover:border-gray-400';
 </script>
 
 <style scoped>

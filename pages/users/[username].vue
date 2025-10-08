@@ -75,133 +75,71 @@ import { computed, ref, watch } from 'vue';
 
 const route = useRoute();
 const username = route.params.username;
-const currentUser = useStrapiUser(); // Use useStrapiUser for current user info
-const { find, findOne, update } = useStrapi(); // Import necessary Strapi actions
-const config = useRuntimeConfig();
+const currentUser = useStrapiUser();
+const { find, findOne, update } = useStrapi();
+const client = useStrapiClient();
 
 // --- Reactive state for follow functionality ---
 const isFollowing = ref(false);
 const followersCount = ref(0);
 const followPending = ref(false);
 
-// --- UTILITY: User Data Fetching and Assembly ---
-
 const { data: userData, pending, error } = await useAsyncData(
-    `user-profile-combined-${username}`,
+    `user-profile-${username}`,
     async () => {
-        // 1. Find Target User by Username (Strapi /users endpoint)
+        // 1. Find Target User by Username
         const userQuery = await find('users', {
             filters: { username: { $eq: username } },
-            populate: ['profilePicture', 'following'], // Need following for initialization
+            populate: ['profilePicture', 'following', 'followers'],
         });
 
-        const targetUser = userQuery.data?.[0];
+        console.log("User Query Result:", userQuery);
+
+        // Correctly access the user from the 'data' array
+        const targetUser = userQuery[0];
 
         if (!targetUser) {
-            return null;
+            throw createError({ statusCode: 404, message: `User @${username} not found` });
         }
 
-        // 2. Count Followers
-        // Strapi requires filtering the 'following' relation on ALL users to find who follows the target user.
-        // NOTE: This can be heavy on large datasets, but is the pure REST approach.
-        const followersResponse = await find('users', {
-            filters: { following: { id: { $eq: targetUser.id } } },
-            pagination: { pageSize: 1 } // We only need the total count, not the data
-        });
-        const followersTotal = followersResponse?.meta?.pagination?.total || 0;
-
-
-        // 3. Fetch Target User's Public Items
+        // 2. Fetch Target User's Public Items
         const itemsResponse = await find('items', {
             filters: {
                 user: { id: { $eq: targetUser.id } },
                 isPrivate: { $eq: false }
             },
-            populate: ['userImages', 'manufacturer', 'series'], // Populate necessary fields for ItemCard
+            populate: ['userImages', 'manufacturer', 'series'],
             pagination: { pageSize: 100 },
             sort: ['createdAt:desc'],
         });
+        console.log("Items Response:", itemsResponse);
 
-        // 4. Determine isFollowing status
+        // 3. Determine isFollowing status
         let isFollowingStatus = false;
-        let followingIds = [];
-
-        // Check current user's following list (populated in userQuery, if available)
-        if (currentUser.value) {
-            // Re-fetch current user data to ensure 'following' list is fresh
-            const currentUserResponse = await findOne('users', currentUser.value.id, { populate: ['following'] });
-
-            const followingRelation = currentUserResponse?.following;
-
-            if (followingRelation?.data) {
-                // Standard V5 response structure for many-relation
-                followingIds = followingRelation.data.map(f => f.id);
-            } else if (followingRelation) {
-                // Flattened structure (assuming Nuxt Strapi configured this way)
-                followingIds = followingRelation.map(f => f.id);
-            }
-
-            isFollowingStatus = followingIds.includes(targetUser.id);
+        if (currentUser.value && targetUser.followers) {
+            isFollowingStatus = targetUser.followers.some(follower => follower.id === currentUser.value.id);
         }
 
-        // --- Transformation and Assembly (Strictly no .attributes) ---
-
-        // Flatten User Profile Data
-        const profile = {
-            id: targetUser.id,
-            username: targetUser.username,
-            displayName: targetUser.displayName || targetUser.username,
-            createdAt: targetUser.createdAt,
-            followingCount: followingRelation?.data?.length || followingRelation?.length || 0, // Current user's following count
-            // Map profile picture URL (Media Relation)
-            profilePicture: targetUser.profilePicture ? {
-                url: targetUser.profilePicture.url.startsWith('http') ? targetUser.profilePicture.url : config.public.strapi.url + targetUser.profilePicture.url,
-            } : null
-        };
-
-        // Transform Items (Flatten relations and prefix URLs)
-        const transformedItems = itemsResponse.data.map(item => {
-            const transformedItem = { id: item.id, ...item };
-
-            // Flatten single relations
-            transformedItem.manufacturer = item.manufacturer?.name || null;
-            transformedItem.series = item.series?.name || null;
-
-            // Media URL prefixing
-            if (transformedItem.userImages?.length) {
-                transformedItem.userImages = transformedItem.userImages.map(img => ({
-                    id: img.id,
-                    url: img.url.startsWith('http') ? img.url : config.public.strapi.url + img.url
-                }));
-            } else {
-                transformedItem.userImages = [];
-            }
-            return transformedItem;
-        });
-
-
         return {
-            profile,
-            items: transformedItems,
-            followersCount: followersTotal,
+            profile: targetUser,
+            // FIX: Return the .data array from the response, not the whole object
+            items: itemsResponse.data || [],
             isFollowing: isFollowingStatus,
-            currentUserFollowingIds: followingIds,
         };
     }
 );
 
-// --- Component State & Computed Properties ---
-
+// --- Computed Properties ---
+// Use optional chaining (`?.`) to prevent errors if userData is null
 const profileData = computed(() => userData.value?.profile);
+const profileId = computed(() => userData.value?.profile?.id); // Get ID from top level
 const items = computed(() => userData.value?.items || []);
-pending = computed(() => pending.value); // Re-map pending for template usage
 
 // Watch for the async data to resolve and initialize local state
 watch(userData, (newData) => {
-    if (newData) {
-        // Initialize reactive states from server data
+    if (newData?.profile) {
         isFollowing.value = newData.isFollowing;
-        followersCount.value = newData.followersCount;
+        followersCount.value = newData.profile.followers?.length || 0;
     }
 }, { immediate: true });
 
@@ -210,10 +148,7 @@ useHead({
 });
 
 const profilePictureUrl = computed(() => {
-    if (profileData.value?.profilePicture?.url) {
-        return profileData.value.profilePicture.url; // Already prefixed in transform
-    }
-    return '/avatar-placeholder.png';
+    return profileData.value?.profilePicture?.url || '/avatar-placeholder.png';
 });
 
 const memberSince = computed(() => {
@@ -228,58 +163,39 @@ const memberSince = computed(() => {
 
 // --- Action for Following/Unfollowing ---
 const handleFollowToggle = async () => {
-    if (!currentUser.value?.id || followPending.value || !profileData.value) return;
+    // Guard clauses remain the same
+    if (!currentUser.value || followPending.value || !profileId.value) return;
 
     followPending.value = true;
 
-    // Get the current list of IDs the user is following
-    const currentFollowingIds = userData.value.currentUserFollowingIds || [];
-    const targetUserId = profileData.value.id;
-
-    let newFollowingIds;
-    let isNowFollowing = false;
-
-    if (isFollowing.value) {
-        // Unfollow: Remove the target ID
-        newFollowingIds = currentFollowingIds.filter(id => id !== targetUserId);
-    } else {
-        // Follow: Add the target ID
-        newFollowingIds = [...currentFollowingIds, targetUserId];
-        isNowFollowing = true;
-    }
+    // Determine the endpoint and the optimistic UI change
+    const isCurrentlyFollowing = isFollowing.value;
+    const endpoint = isCurrentlyFollowing
+        ? `/users/${profileId.value}/unfollow`
+        : `/users/${profileId.value}/follow`;
 
     try {
-        // Optimistic UI Update
-        isFollowing.value = isNowFollowing;
-        followersCount.value += isNowFollowing ? 1 : -1;
+        // Optimistic UI Update: change the state immediately for a better UX
+        isFollowing.value = !isCurrentlyFollowing;
+        followersCount.value += !isCurrentlyFollowing ? 1 : -1;
 
-        // Update the current user's 'following' relation in Strapi
-        await update('users', currentUser.value.id, {
-            // Send the entire list of new relation IDs
-            following: newFollowingIds
-        });
+        // Use the client to make a POST request to your custom endpoint.
+        // The authentication token is automatically included.
+        await client(endpoint, { method: 'POST' });
 
-        // Success: The local state (isFollowing and followersCount) and the underlying
-        // userData (currentUserFollowingIds) are now updated.
+        // If the request succeeds, the optimistic update was correct.
+        // No further action is needed.
 
-    } catch (e) {
-        console.error("Failed to update follow relationship:", e);
-        // Revert UI on failure
-        isFollowing.value = !isNowFollowing;
-        followersCount.value += isNowFollowing ? -1 : 1;
-        alert(e.response?.data?.error?.message || 'An error occurred. Please try again.');
+    } catch (err) {
+        console.error("Failed to update follow relationship:", err);
+
+        // If the request fails, revert the optimistic UI changes
+        isFollowing.value = isCurrentlyFollowing; // Revert to the original state
+        followersCount.value += isCurrentlyFollowing ? 1 : -1; // Revert the count
+
+        alert('An error occurred. Please try again.');
     } finally {
         followPending.value = false;
-
-        // Re-run the main data fetch (or the specific part that checks following)
-        // to refresh the stored currentUserFollowingIds list and count if needed,
-        // although the manual update above should suffice for the immediate state.
-
-        // NOTE: We MUST manually update the internal state of userData.currentUserFollowingIds 
-        // to ensure future follow toggles work correctly without a full page reload.
-        if (!e) {
-            userData.value.currentUserFollowingIds = newFollowingIds;
-        }
     }
 };
 </script>

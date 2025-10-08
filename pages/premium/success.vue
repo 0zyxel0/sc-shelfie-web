@@ -42,13 +42,14 @@
 
 <script setup>
 import { ref, onMounted } from 'vue';
+import { watchEffect } from 'vue';
 
 useHead({ title: 'Payment Success | Shelfie' });
 
 const router = useRouter();
 const user = useStrapiUser(); // Use standard Strapi user composable
 const { refreshUser } = useStrapiAuth(); // Assuming Strapi Auth provides a refresh function
-
+const { update } = useStrapi(); // Use Strapi update composable
 const verificationStatus = ref('pending');
 const errorMessage = ref('');
 
@@ -57,6 +58,9 @@ onMounted(async () => {
 
     // Clean up immediately
     sessionStorage.removeItem('paymongo_checkout_session_id');
+
+    console.log("Verifying payment for session ID:", sessionId);
+    console.log("Current user:", user.value);
 
     // 1. Ensure user is loaded (or attempt to load them if state is fresh)
     if (!user.value) {
@@ -81,10 +85,20 @@ onMounted(async () => {
 
     try {
         // 2. Server-Side Verification (MUST remain $fetch to Nitro/Server Route)
-        await $fetch('/api/paymongo/verify-payment', {
+        const result = await $fetch('/api/paymongo/verify-payment', {
             method: 'POST',
             body: { checkoutSessionId: sessionId, userId: user.value.id } // Optionally send user ID for verification
         });
+
+        if (!result.success) {
+            throw new Error("Payment not verified. Status: " + result.status);
+        } else {
+            await update('users', user.value.id, { subscriptionType: `Premium` });
+            //TODO: Not changing subscriptionType to "Premium" in case you have multiple premium tiers
+            //TODO: Add subscription expiry date based on your billing cycle 
+            //TODO: Consider storing subscription details in a separate collection for better management
+        }
+
 
         // 3. Success: Refresh user state to get the new "Premium" role/subscription status
         if (refreshUser) {
