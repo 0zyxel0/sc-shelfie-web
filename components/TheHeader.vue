@@ -31,7 +31,7 @@
             </nav>
 
             <!-- --- FIX: Hide button if user is already premium --- -->
-            <NuxtLink v-if="!isPremiumUser" to="/go-premium" class="hidden sm:block bg-gradient-to-r from-yellow-400 to-orange-500 hover:from-yellow-500 hover:to-orange-600 text-white font-semibold py-2 px-4 rounded-full transition-all text-sm shadow">
+            <NuxtLink v-if="!isPremium" to="/go-premium" class="hidden sm:block bg-gradient-to-r from-yellow-400 to-orange-500 hover:from-yellow-500 hover:to-orange-600 text-white font-semibold py-2 px-4 rounded-full transition-all text-sm shadow">
               Go Premium
             </NuxtLink>
 
@@ -52,7 +52,7 @@
                   <NuxtLink to="/calendar" @click="isMenuOpen = false" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Calendar</NuxtLink>
                   <NuxtLink to="/profile" @click="isMenuOpen = false" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Profile</NuxtLink>
                   <!-- --- FIX: Hide mobile link if user is already premium --- -->
-                  <div v-if="!isPremiumUser" class="border-t my-1">
+                  <div v-if="!isPremium" class="border-t my-1">
                     <NuxtLink to="/go-premium" @click="isMenuOpen = false" class="block px-4 py-2 text-sm text-yellow-600 font-semibold hover:bg-gray-100">Go Premium</NuxtLink>
                   </div>
                 </div>
@@ -75,6 +75,9 @@
 
 <script setup>
 import { ref, computed } from 'vue';
+const { isPremium } = usePremiumStatus();
+
+console.log('Is Premium:', isPremium.value); // Debugging line to check the value of isPremium
 
 const isMenuOpen = ref(false);
 const searchQuery = ref('');
@@ -91,7 +94,6 @@ await useAsyncData('header-user-fetch', async () => {
   return user.value;
 });
 
-const isPremiumUser = computed(() => user.value?.subscriptionType === 'Premium');
 
 const performSearch = () => {
   if (searchQuery.value.trim()) {

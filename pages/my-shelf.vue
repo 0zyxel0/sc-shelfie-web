@@ -19,15 +19,15 @@
                     </NuxtLink>
 
                     <!-- === NEW: Export Dropdown === -->
-                    <div class="relative" ref="exportMenuRef" @mouseenter="showPremiumHint = !isPremiumUser" @mouseleave="showPremiumHint = false">
-                        <button @click="isExportMenuOpen = !isExportMenuOpen" :disabled="!isPremiumUser" class="flex items-center justify-center bg-white border border-gray-300 hover:bg-gray-100 text-gray-700 font-bold py-3 px-4 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                    <div class="relative" ref="exportMenuRef" @mouseenter="showPremiumHint = !isPremium" @mouseleave="showPremiumHint = false">
+                        <button @click="isExportMenuOpen = !isExportMenuOpen" :disabled="!isPremium" class="flex items-center justify-center bg-white border border-gray-300 hover:bg-gray-100 text-gray-700 font-bold py-3 px-4 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
                             </svg>
                         </button>
 
                         <!-- Export Dropdown for Premium Users -->
-                        <div v-if="isExportMenuOpen && isPremiumUser" class="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-xl z-20">
+                        <div v-if="isExportMenuOpen && isPremium" class="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-xl z-20">
                             <div class="py-1">
                                 <a href="#" @click.prevent="exportToCSV" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Export as CSV</a>
                                 <a href="#" @click.prevent="exportToPDF" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Export as PDF</a>
@@ -119,6 +119,7 @@
 <script setup>
 import { ref, reactive, computed } from 'vue';
 import { onClickOutside } from '@vueuse/core';
+const { isPremium } = usePremiumStatus();
 
 definePageMeta({ middleware: 'auth' });
 useHead({ title: 'My Shelf | Shelfie' });
@@ -126,7 +127,6 @@ useHead({ title: 'My Shelf | Shelfie' });
 const user = useStrapiUser();
 const { find } = useStrapi(); // Import useStrapi
 
-const isPremiumUser = computed(() => user.value?.subscriptionType === 'Premium');
 const config = useRuntimeConfig();
 
 // --- UTILITY FOR SAFELY EXTRACTING RELATIONS ---
@@ -265,7 +265,7 @@ onClickOutside(exportMenuRef, () => {
 // --- CLIENT-SIDE EXPORT FUNCTIONS (Unchanged) ---
 const exportToCSV = async () => {
     if (process.server) return;
-    if (!isPremiumUser.value) {
+    if (!isPremium.value) {
         alert("This is a premium feature.");
         return;
     }
@@ -296,7 +296,7 @@ const exportToCSV = async () => {
 
 const exportToPDF = async () => {
     if (process.server) return;
-    if (!isPremiumUser.value) {
+    if (!isPremium.value) {
         alert("This is a premium feature.");
         return;
     }

@@ -11,9 +11,13 @@ export default defineNuxtConfig({
     },
     user: {
       // Tell the module to populate the 'profilePicture' relation
-      populate: ["profilePicture"],
+      populate: ["profilePicture", "subscription"],
       // This is a good default to ensure data is always fresh on login/refresh
       fetchOnLogin: true,
+    },
+    auth: {
+      populate: ["profilePicture", "subscription"],
+      fields: ["displayName"],
     },
     prefix: "/api",
     admin: "/admin",

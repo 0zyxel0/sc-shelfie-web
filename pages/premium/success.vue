@@ -42,14 +42,13 @@
 
 <script setup>
 import { ref, onMounted } from 'vue';
-import { watchEffect } from 'vue';
 
 useHead({ title: 'Payment Success | Shelfie' });
 
 const router = useRouter();
-const user = useStrapiUser(); // Use standard Strapi user composable
-const { refreshUser } = useStrapiAuth(); // Assuming Strapi Auth provides a refresh function
-const { update } = useStrapi(); // Use Strapi update composable
+const user = useStrapiUser();
+const { fetchUser: refreshUser } = useStrapiAuth(); // Correct way to get the refresh function for the user
+const { create } = useStrapi(); // Import 'create' instead of 'update'
 const verificationStatus = ref('pending');
 const errorMessage = ref('');
 
@@ -59,18 +58,11 @@ onMounted(async () => {
     // Clean up immediately
     sessionStorage.removeItem('paymongo_checkout_session_id');
 
-    console.log("Verifying payment for session ID:", sessionId);
-    console.log("Current user:", user.value);
-
-    // 1. Ensure user is loaded (or attempt to load them if state is fresh)
+    // 1. Ensure user is loaded
     if (!user.value) {
-        // Attempt to load the user, which typically happens automatically via middleware/plugin
-        // But we can call refresh explicitly if we suspect the state is stale.
-        if (refreshUser) {
-            await refreshUser();
-        }
+        // Attempting to refresh the user state if it's not present
+        await refreshUser();
     }
-
     if (!user.value) {
         errorMessage.value = "You must be logged in to verify a payment.";
         verificationStatus.value = 'error';
@@ -84,32 +76,56 @@ onMounted(async () => {
     }
 
     try {
-        // 2. Server-Side Verification (MUST remain $fetch to Nitro/Server Route)
+        // 2. Server-Side Verification
+        // This remains the same, but we expect more data in the response
         const result = await $fetch('/api/paymongo/verify-payment', {
             method: 'POST',
-            body: { checkoutSessionId: sessionId, userId: user.value.id } // Optionally send user ID for verification
+            body: { checkoutSessionId: sessionId }
         });
 
-        if (!result.success) {
-            throw new Error("Payment not verified. Status: " + result.status);
-        } else {
-            await update('users', user.value.id, { subscriptionType: `Premium` });
-            //TODO: Not changing subscriptionType to "Premium" in case you have multiple premium tiers
-            //TODO: Add subscription expiry date based on your billing cycle 
-            //TODO: Consider storing subscription details in a separate collection for better management
+        if (!result.success || !result.plan) {
+            throw new Error(result.message || "Payment could not be confirmed by the server.");
         }
 
+        // --- NEW LOGIC: Create a Subscription Entry ---
 
-        // 3. Success: Refresh user state to get the new "Premium" role/subscription status
-        if (refreshUser) {
-            await refreshUser();
-        }
+        // Helper function to calculate the expiration date
+        const calculateExpiryDate = (plan) => {
+            const date = new Date();
+            if (plan === 'annually') {
+                date.setFullYear(date.getFullYear() + 1);
+            } else {
+                // Default to monthly
+                date.setMonth(date.getMonth() + 1);
+            }
+            return date.toISOString();
+        };
+
+        // Prepare the data payload for the 'subscriptions' collection
+        const subscriptionPayload = {
+            // Strapi v4/v5 requires payloads to be wrapped in a 'data' object
+            user: user.value.id,
+            plan: result.plan,
+            subscriptionStatus: 'active',
+            expiresAt: calculateExpiryDate(result.plan),
+            providerSubscriptionId: result.providerSubscriptionId,
+            lastCheckoutSessionId: sessionId,
+
+        };
+
+        // Create the new subscription record in Strapi
+        await create('subscriptions', subscriptionPayload);
+
+        // --- END OF NEW LOGIC ---
+
+        // 3. Success: Refresh user state. If you populated 'subscriptions' on the user model,
+        // this will fetch the new subscription details.
+        await refreshUser();
 
         verificationStatus.value = 'success';
 
     } catch (e) {
         console.error("Payment verification failed:", e);
-        // Safely extract error message
         errorMessage.value = e.data?.statusMessage || e.message || "An error occurred during verification.";
         verificationStatus.value = 'error';
     }
