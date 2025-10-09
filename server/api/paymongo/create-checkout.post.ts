@@ -1,6 +1,5 @@
 // /server/api/paymongo/create-checkout.post.ts
 import { createError, defineEventHandler, readBody } from "h3";
-import { useStrapiUser } from "#strapi"; // ✅ Nuxt Strapi plugin helper
 
 // --- Server-side source of truth for pricing ---
 const PLANS = {
@@ -16,19 +15,32 @@ const PLANS = {
   },
 };
 
-export default defineEventHandler(async (event) => {
-  // ✅ 1. Get the currently authenticated Strapi user via Nuxt Strapi plugin
-  const loggedInUser = await useStrapiUser(event);
+// Define the shape of the user data we expect in the body
+interface UserData {
+  id: number;
+  username?: string | undefined;
+  email?: string | undefined;
+  provider?: string | undefined;
+  confirmed?: boolean | undefined;
+  blocked?: boolean | undefined;
+  createdAt?: string | undefined;
+  updatedAt?: string | undefined;
+}
 
-  if (!loggedInUser) {
+export default defineEventHandler(async (event) => {
+  // ✅ 1. Get user data and plan from the request body
+  // MODIFIED: Instead of using a Strapi plugin, we now read both 'plan' and 'user' from the body.
+  const { plan, user } = await readBody<{ plan: keyof typeof PLANS; user: UserData }>(event);
+
+  // MODIFIED: Validate the user data received from the body.
+  if (!user || !user.id || !user.email || !user.username) {
     throw createError({
-      statusCode: 401,
-      statusMessage: "Unauthorized. You must be logged in to go premium.",
+      statusCode: 400,
+      statusMessage: "Bad Request. User data (id, email, name) is required in the body.",
     });
   }
 
   // ✅ 2. Parse and validate plan
-  const { plan } = await readBody<{ plan: keyof typeof PLANS }>(event);
   const selectedPlan = PLANS[plan];
 
   if (!selectedPlan) {
@@ -65,9 +77,10 @@ export default defineEventHandler(async (event) => {
       body: {
         data: {
           attributes: {
+            // MODIFIED: Use the 'user' object from the body instead of 'loggedInUser'.
             billing: {
-              email: loggedInUser.email,
-              name: loggedInUser.username || loggedInUser.displayName || loggedInUser.email,
+              email: user.email,
+              name: user.username, // The name is now required in the body
             },
             send_email_receipt: true,
             show_description: false,
@@ -84,7 +97,10 @@ export default defineEventHandler(async (event) => {
             success_url: `${config.publicSiteUrl}/premium/success`,
             cancel_url: `${config.publicSiteUrl}/premium/cancelled`,
             metadata: {
-              strapiUserId: loggedInUser.id,
+              // MODIFIED: Use the user ID from the body.
+              // Note: You might want to rename 'strapiUserId' to a more generic 'userId'
+              // if you are no longer exclusively using Strapi.
+              strapiUserId: user.id,
               plan,
             },
           },

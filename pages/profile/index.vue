@@ -115,7 +115,7 @@ const { logout } = useStrapiAuth();
 const user = useStrapiUser();
 
 const { find } = useStrapi();
-const { client } = useStrapiClient();
+const client = useStrapiClient();
 const router = useRouter();
 const config = useRuntimeConfig();
 useHead({
