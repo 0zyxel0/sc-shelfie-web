@@ -103,6 +103,7 @@
 </template>
 
 <script setup>
+import { reloadNuxtApp } from "nuxt/app";
 // REMOVE: `qs` is now used on the server, not the client.
 // import qs from 'qs';
 
@@ -125,22 +126,20 @@ useHead({
 const { data: userItems, pending: itemsPending } = await useAsyncData(
   `profile-items-${user.value?.id}`, // The key should still depend on user ID
   async () => {
+    console.log("User data in asyncData:", user.value);
     if (!user.value?.id) return { data: [] };
-
+    console.log("Fetching items for user:", user.value.documentId);
     const queryParams = {
       populate: { userImages: { fields: ['url'] } },
-      filters: { user: { id: { $eq: user.value.id } } },
-      'pagination[pageSize]': 1000,
+      filters: { user: { documentId: { $eq: user.value.documentId } } },
       sort: 'createdAt:desc',
     };
 
-    return await find('items', {
-      method: 'GET',
-      query: queryParams,
-    });
+    return await find('items', queryParams);
   },
   {
     transform: (response) => {
+      console.log("Fetched items response:", response);
       if (!response?.data) return [];
       return response.data.map(item => ({ id: item.id, ...item }));
     },
@@ -216,7 +215,8 @@ const pending = computed(() => itemsPending.value);
 const handleLogout = async () => {
   try {
     // This now calls our enhanced logout function which includes clearNuxtData()
-    await logout();
+    logout();
+    reloadNuxtApp();
   } catch (e) {
     console.error("Logout failed on page:", e);
   } finally {

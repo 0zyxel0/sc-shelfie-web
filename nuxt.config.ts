@@ -17,7 +17,7 @@ export default defineNuxtConfig({
     },
     auth: {
       populate: ["profilePicture", "subscription"],
-      fields: ["displayName"],
+      fields: ["displayName", "username", "email"],
     },
     prefix: "/api",
     admin: "/admin",
