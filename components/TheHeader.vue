@@ -27,10 +27,11 @@
         <div class="flex items-center space-x-2 md:space-x-6">
           <template v-if="user">
             <nav class="hidden md:flex items-center space-x-6 text-sm font-medium text-gray-600">
-              <NuxtLink to="/feed" class="hover:text-blue-500" active-class="text-blue-600 font-semibold">Feed</NuxtLink>
-              <NuxtLink to="/my-shelf" class="hover:text-blue-500" active-class="text-blue-600 font-semibold">My Shelf</NuxtLink>
-              <NuxtLink to="/calendar" class="hover:text-blue-500" active-class="text-blue-600 font-semibold">Calendar</NuxtLink>
-              <NuxtLink to="/profile" class="hover:text-blue-500" active-class="text-blue-600 font-semibold">Profile</NuxtLink>
+              <NuxtLink to="/showcase" class="text-gray-600 hover:text-blue-600" active-class="text-blue-600 font-semibold">Latest</NuxtLink>
+              <NuxtLink to="/feed" class="text-gray-600 hover:text-blue-600" active-class="text-blue-600 font-semibold">Feed</NuxtLink>
+              <NuxtLink to="/my-shelf" class="text-gray-600 hover:text-blue-600" active-class="text-blue-600 font-semibold">My Shelf</NuxtLink>
+              <NuxtLink to="/calendar" class="text-gray-600 hover:text-blue-600" active-class="text-blue-600 font-semibold">Calendar</NuxtLink>
+              <NuxtLink to="/profile" class="text-gray-600 hover:text-blue-600" active-class="text-blue-600 font-semibold">Profile</NuxtLink>
             </nav>
 
             <!-- --- FIX: Hide button if user is already premium --- -->

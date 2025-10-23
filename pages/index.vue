@@ -1,22 +1,22 @@
 <template>
     <div class="bg-white font-sans text-gray-800">
         <!-- Header -->
-        <header class="container mx-auto px-6 py-4 flex justify-between items-center">
+        <!-- <header class="container mx-auto px-6 py-4 flex justify-between items-center">
             <div class="text-2xl font-bold text-gray-900">
                 Shelfie
             </div>
             <nav class="hidden md:flex items-center space-x-6">
                 <a href="#" class="text-gray-600 hover:text-blue-600">Features</a>
-                <a href="#" class="text-gray-600 hover:text-blue-600">Pricing</a>
+                <NuxtLink href="#" class="text-gray-600 hover:text-blue-600">Pricing</a>
                 <NuxtLink to="/showcase" class="text-gray-600 hover:text-blue-600">Showcase</NuxtLink>
                 <a href="#" class="text-gray-600 hover:text-blue-600">Discover</a>
                 <a href="#" class="text-gray-600 hover:text-blue-600">Latest</a>
-                <a href="#" class="text-gray-600 hover:text-blue-600">My Collection</a>
+                <NuxtLink to="/my-shelf"class="text-gray-600 hover:text-blue-600">My Collection</NuxtLink>
             </nav>
             <NuxtLink to="/auth" class="bg-blue-600 text-white font-semibold py-2 px-5 rounded-lg hover:bg-blue-700 transition">
                 Sign Up
             </NuxtLink>
-        </header>
+        </header> -->
 
         <!-- Hero Section -->
         <main class="container mx-auto px-6 pt-16 pb-24">
@@ -236,9 +236,6 @@ import {
     Twitter, Instagram, Facebook, Youtube
 } from 'lucide-vue-next';
 
-definePageMeta({
-    layout: 'no-header', // Use the 'no-header' layout you created
-});
 
 const collections = [
     {
