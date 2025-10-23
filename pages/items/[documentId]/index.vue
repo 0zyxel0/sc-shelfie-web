@@ -101,6 +101,12 @@
                             <h3 class="font-semibold text-gray-700">My Notes</h3>
                             <div class="prose prose-sm mt-2 max-w-none text-gray-600" v-html="item.description"></div>
                         </div>
+
+                        <!-- User Review -->
+                        <div v-if="item.review" class="mt-6">
+                            <h3 class="font-semibold text-gray-700">Owner's Review</h3>
+                            <div class="prose prose-sm mt-2 max-w-none text-gray-600" v-html="item.review"></div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -268,12 +274,13 @@ const postComment = async () => {
     commentPending.value = true;
     try {
         await create('comments', {
-            itemId: item.value.documentId || item.value.id,
+            item: item.value.documentId || item.value.id,
             content: newComment.value,
             user: currentUser.value.id
         });
         newComment.value = '';
-        refresh(); // Refetch all page data to get the new comment
+        reloadNuxtApp();
+        //refresh(); // Refetch all page data to get the new comment
     } catch (e) {
         console.error("Failed to post comment:", e);
         alert('Failed to post comment.');

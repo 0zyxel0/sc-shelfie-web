@@ -4,9 +4,12 @@
   <header class="bg-white shadow-sm sticky top-0 z-40">
     <div class="container mx-auto px-4 sm:px-6 lg:px-8">
       <div class="flex justify-between items-center h-16">
-        <NuxtLink to="/" class="text-2xl font-bold text-gray-800 tracking-tighter">
-          Shelfie
+
+        <NuxtLink to="/">
+          <a class="text-2xl font-bold text-black-600">Shelf</a>
+          <a class="text-2xl font-bold text-blue-600">ie </a>
         </NuxtLink>
+
 
         <div class="flex-1 px-4 lg:px-8">
           <form @submit.prevent="performSearch">
