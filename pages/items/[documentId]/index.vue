@@ -135,11 +135,23 @@
                                 <DetailItem label="Release Date" value="2023-03" />
                             </div>
                             <hr />
+
+                            <!-- NEW: Tags with Voting -->
+                            <div v-if="item.itags?.length > 0">
+                                <div>
+                                    <span class="text-sm text-gray-500 font-medium">Tags</span>
+                                    <div class="mt-2 flex flex-wrap gap-2">
+                                        <!-- Assuming TagVoteButtons component is auto-imported by Nuxt -->
+                                        <TagVoteButtons v-for="tag in item.itags" :key="tag.id" :tag="tag" />
+                                    </div>
+                                </div>
+                                <hr class="mt-4" />
+                            </div>
                             <!-- Actions -->
-                            <div class="flex items-center space-x-2">
+                            <!-- <div class="flex items-center space-x-2">
                                 <button class="flex-1 action-button-sm">Print</button>
                                 <button class="flex-1 action-button-sm">QR Code</button>
-                            </div>
+                            </div> -->
                         </div>
                     </div>
 
