@@ -102,8 +102,8 @@
       <div v-else>
         <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
           <!-- Showcase Card -->
-          <div v-for="item in filteredItems" :key="item.id" class="bg-white rounded-lg shadow-md border border-gray-200 overflow-hidden flex flex-col group">
-            <NuxtLink :to="`/items/${item.id}`" class="relative">
+          <div v-for="item in filteredItems" :key="item.documentId" class="bg-white rounded-lg shadow-md border border-gray-200 overflow-hidden flex flex-col group">
+            <NuxtLink :to="`/items/${item.documentId}`" class="relative">
               <img :src="item.userImages[0]?.url || 'https://via.placeholder.com/400x300'" :alt="item.name" class="w-full h-56 object-cover group-hover:opacity-90 transition-opacity" />
               <span class="absolute top-2 right-2 bg-black bg-opacity-60 text-white text-xs font-semibold px-2 py-1 rounded-full">{{ item.categories[0]?.name || 'Uncategorized' }}</span>
             </NuxtLink>
@@ -116,7 +116,7 @@
                 </div>
               </div>
               <h3 class="font-bold text-gray-900 flex-grow group-hover:text-blue-600 transition-colors">
-                <NuxtLink :to="`/items/${item.id}`">{{ item.name }}</NuxtLink>
+                <NuxtLink :to="`/items/${item.documentId}`">{{ item.name }}</NuxtLink>
               </h3>
               <div class="mt-3 flex flex-wrap gap-2">
                 <span v-for="tag in item.itags.slice(0, 3)" :key="tag.id" class="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-full">{{ tag.name }}</span>

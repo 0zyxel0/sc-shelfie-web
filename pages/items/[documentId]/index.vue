@@ -10,7 +10,7 @@
             <div class="text-center">
                 <h2 class="text-2xl text-red-600 font-bold mb-2">Failed to load item</h2>
                 <p class="text-gray-600">{{ error?.data?.statusMessage || "The item could not be found." }}</p>
-                <NuxtLink to="/my-collection" class="mt-4 inline-block text-blue-500 hover:underline">Go to My Collection</NuxtLink>
+                <NuxtLink to="/my-shelf" class="mt-4 inline-block text-blue-500 hover:underline">Go to My Collection</NuxtLink>
             </div>
         </div>
 
@@ -23,13 +23,13 @@
                     <ol class="list-none p-0 inline-flex">
                         <li class="flex items-center">
                             <NuxtLink to="/" class="hover:text-gray-700">Home</NuxtLink>
-                            <svg class="fill-current w-3 h-3 mx-3" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512">
+                            <svg class="fill-current w-3 h-3 mx-3" xmlns="http://www.w.org/2000/svg" viewBox="0 0 320 512">
                                 <path d="M285.476 272.971L91.132 467.314c-9.373 9.373-24.569 9.373-33.941 0l-22.667-22.667c-9.357-9.357-9.375-24.522-.04-33.901L188.505 256 34.484 101.255c-9.335-9.379-9.317-24.544.04-33.901l22.667-22.667c9.373-9.373 24.569-9.373 33.941 0L285.475 239.03c9.373 9.372 9.373 24.568.001 33.941z" />
                             </svg>
                         </li>
                         <li class="flex items-center">
                             <NuxtLink to="/my-collection" class="hover:text-gray-700">My Collection</NuxtLink>
-                            <svg class="fill-current w-3 h-3 mx-3" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512">
+                            <svg class="fill-current w-3 h-3 mx-3" xmlns="http://www.w.org/2000/svg" viewBox="0 0 320 512">
                                 <path d="M285.476 272.971L91.132 467.314c-9.373 9.373-24.569 9.373-33.941 0l-22.667-22.667c-9.357-9.357-9.375-24.522-.04-33.901L188.505 256 34.484 101.255c-9.335-9.379-9.317-24.544.04-33.901l22.667-22.667c9.373-9.373 24.569-9.373 33.941 0L285.475 239.03c9.373 9.372 9.373 24.568.001 33.941z" />
                             </svg>
                         </li>
@@ -51,7 +51,7 @@
                                 {{ item.userImages.length }} Photos
                             </div>
                             <div class="flex items-center">
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1.5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <svg xmlns="http://www.w.org/2000/svg" class="h-5 w-5 mr-1.5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                                 </svg>
                                 Added {{ formattedDate(item.createdAt) }}
@@ -93,7 +93,7 @@
                             </svg>
                         </button>
                         <button @click="changeImage(1)" class="absolute right-4 top-1/2 -translate-y-1/2 bg-white/80 rounded-full p-2 shadow-md hover:bg-white transition">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <svg xmlns="http://www.w.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
                             </svg>
                         </button>
@@ -113,33 +113,33 @@
                             <!-- Status & Condition -->
                             <div class="grid grid-cols-2 gap-4 text-sm">
                                 <DetailItem label="Status" :value="item.itemStatus" icon="check" />
-                                <!-- <DetailItem label="Condition" value="Mint" />
-                                <DetailItem label="Box Condition" value="Perfect" /> -->
+                                <DetailItem label="Condition" value="Mint" />
+                                <DetailItem label="Box Condition" value="Perfect" />
                                 <DetailItem label="Acquired On" :value="formattedDate(item.purchaseDate)" />
                             </div>
                             <hr />
                             <!-- Acquisition -->
                             <div class="grid grid-cols-2 gap-4 text-sm">
                                 <DetailItem label="Price" :value="formattedPrice(item.purchasePrice)" icon="price" />
-                                <!-- <DetailItem label="Shop" value="SideShow Collectibles" icon="shop" /> -->
+                                <DetailItem label="Shop" value="SideShow Collectibles" icon="shop" />
                             </div>
                             <hr />
                             <!-- Specifications -->
                             <div class="grid grid-cols-2 gap-4 text-sm">
                                 <DetailItem label="Manufacturer" :value="item.manufacturer?.name" />
                                 <DetailItem label="Series" :value="item.series?.name" />
-                                <!-- <DetailItem label="Scale" value="1/4" />
+                                <DetailItem label="Scale" value="1/4" />
                                 <DetailItem label="Material" value="Polystone" />
                                 <DetailItem label="Height" value="52 cm" />
                                 <DetailItem label="Weight" value="4.5 kg" />
-                                <DetailItem label="Release Date" value="2023-03" /> -->
+                                <DetailItem label="Release Date" value="2023-03" />
                             </div>
                             <hr />
                             <!-- Actions -->
-                            <!-- <div class="flex items-center space-x-2">
+                            <div class="flex items-center space-x-2">
                                 <button class="flex-1 action-button-sm">Print</button>
                                 <button class="flex-1 action-button-sm">QR Code</button>
-                            </div> -->
+                            </div>
                         </div>
                     </div>
 
@@ -200,23 +200,58 @@
                 </div>
             </div>
 
+            <!-- NEW: Comment Section -->
+            <div class="mt-12 bg-white p-6 rounded-lg border border-gray-200">
+                <h2 class="text-2xl font-bold text-gray-800 mb-4">Comments ({{ comments?.length || 0 }})</h2>
+
+                <!-- Comment Form -->
+                <div class="mb-6">
+                    <div v-if="currentUser">
+                        <textarea v-model="newComment" rows="3" placeholder="Add a public comment..." class="w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 transition-colors"></textarea>
+                        <button @click="postComment" :disabled="commentPending || !newComment.trim()" class="mt-2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg disabled:bg-blue-400 disabled:cursor-not-allowed">
+                            Post Comment
+                        </button>
+                    </div>
+                    <div v-else class="text-center p-4 border rounded-lg bg-gray-50">
+                        <p>You must be <NuxtLink to="/login" class="text-blue-600 font-semibold hover:underline">logged in</NuxtLink> to post a comment.</p>
+                    </div>
+                </div>
+
+                <!-- Comments List -->
+                <div v-if="commentsPending" class="text-gray-500">Loading comments...</div>
+                <div v-else>
+                    <div v-for="comment in comments" :key="comment.id" class="flex space-x-4 py-4 border-t first:border-t-0">
+                        <img :src="comment.user?.profilePicture?.url || '/avatar-placeholder.png'" class="h-10 w-10 rounded-full object-cover flex-shrink-0">
+                        <div class="flex-1">
+                            <p class="font-semibold text-gray-800">
+                                <NuxtLink :to="`/users/${comment.user?.username}`" class="hover:underline">@{{ comment.user?.username }}</NuxtLink>
+                            </p>
+                            <p class="prose prose-sm mt-1 max-w-none text-gray-600">{{ comment.content }}</p>
+                        </div>
+                    </div>
+                    <p v-if="!comments || comments.length === 0" class="text-gray-500 pt-4">Be the first to comment!</p>
+                </div>
+            </div>
+
         </div>
     </div>
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue';
+import { ref, computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import DetailItem from '~/components/DetailItem.vue'; // Assuming DetailItem component exists
+import DetailItem from '~/components/DetailItem.vue';
 
 const route = useRoute();
 const router = useRouter();
 const docId = route.params.documentId;
 const currentUser = useStrapiUser();
-const { findOne, find, update } = useStrapi();
+const { findOne, find, update, create } = useStrapi();
 
 const activeImageIndex = ref(0);
 const likePending = ref(false);
+const commentPending = ref(false);
+const newComment = ref('');
 
 // --- 1. Fetch main item data ---
 const { data: item, pending, error } = await useAsyncData(
@@ -235,18 +270,23 @@ const { data: moreItems } = await useAsyncData(
     () => {
         if (!item.value?.user?.id) return [];
         return find('items', {
-            filters: {
-                user: { id: { $eq: item.value.user.id } },
-                documentId: { $ne: docId }, // Exclude the current item
-            },
+            filters: { user: { id: { $eq: item.value.user.id } }, documentId: { $ne: docId } },
             populate: ['userImages', 'itags'],
             pagination: { limit: 3 }
         });
     },
-    {
-        transform: response => response.data,
-        watch: [() => item.value?.user?.id] // Re-run if user id becomes available
-    }
+    { transform: response => response.data, watch: [() => item.value?.user?.id] }
+);
+
+// --- 3. Fetch Comments ---
+const { data: comments, pending: commentsPending, refresh: refreshComments } = await useAsyncData(
+    `comments-for-item-${docId}`,
+    () => find('comments', {
+        filters: { item: { documentId: { $eq: docId } } },
+        populate: { user: { populate: "profilePicture" } },
+        sort: "createdAt:desc",
+    }),
+    { transform: response => response.data }
 );
 
 // --- Computed Properties ---
@@ -256,14 +296,7 @@ const isLiked = computed(() => {
     if (!currentUser.value || !item.value?.likedBy) return false;
     return item.value.likedBy.some(u => u.id === currentUser.value.id);
 });
-
-const mainImageUrl = computed(() => {
-    if (item.value?.userImages?.length > 0) {
-        return item.value.userImages[activeImageIndex.value]?.url || '/image-placeholder.png';
-    }
-    return '/image-placeholder.png';
-});
-
+const mainImageUrl = computed(() => (item.value?.userImages?.length > 0) ? item.value.userImages[activeImageIndex.value]?.url : '/image-placeholder.png');
 const combinedTags = computed(() => {
     const tags = new Set();
     item.value?.categories?.forEach(cat => tags.add(cat.name));
@@ -272,16 +305,8 @@ const combinedTags = computed(() => {
 });
 
 // --- Formatting Helpers ---
-const formattedDate = (dateString) => {
-    if (!dateString) return 'N/A';
-    return new Date(dateString).toLocaleDateString('en-US', {
-        year: 'numeric', month: 'long', day: 'numeric'
-    });
-};
-const formattedPrice = (price) => {
-    if (price === null || price === undefined) return 'N/A';
-    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(price);
-}
+const formattedDate = (dateString) => dateString ? new Date(dateString).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : 'N/A';
+const formattedPrice = (price) => (price === null || price === undefined) ? 'N/A' : new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(price);
 
 // --- Methods ---
 const changeImage = (direction) => {
@@ -291,26 +316,39 @@ const changeImage = (direction) => {
 };
 
 const toggleLike = async () => {
-    if (!currentUser.value) return router.push('/auth');
+    if (!currentUser.value) return router.push('/login');
     likePending.value = true;
     try {
         const currentLikes = item.value.likedBy.map(u => u.id);
-        const newLikes = isLiked.value
-            ? currentLikes.filter(id => id !== currentUser.value.id)
-            : [...currentLikes, currentUser.value.id];
-
-        const updatedItem = await update('items', docId, { likedBy: newLikes });
-
-        // Optimistically update the local state to avoid a full refetch
-        item.value.likedBy = isLiked.value
-            ? item.value.likedBy.filter(u => u.id !== currentUser.value.id)
-            : [...item.value.likedBy, { id: currentUser.value.id }]; // Simple object is enough for count/isLiked
+        const newLikes = isLiked.value ? currentLikes.filter(id => id !== currentUser.value.id) : [...currentLikes, currentUser.value.id];
+        await update('items', docId, { likedBy: newLikes });
+        item.value.likedBy = isLiked.value ? item.value.likedBy.filter(u => u.id !== currentUser.value.id) : [...item.value.likedBy, { id: currentUser.value.id }];
 
     } catch (e) {
         console.error("Failed to toggle like:", e);
         alert('Failed to update like status.');
     } finally {
         likePending.value = false;
+        reloadNuxtApp();
+    }
+};
+
+const postComment = async () => {
+    if (!newComment.value.trim() || !currentUser.value) return;
+    commentPending.value = true;
+    try {
+        await create('comments', {
+            item: item.value.id,
+            content: newComment.value,
+            user: currentUser.value.id
+        });
+        newComment.value = '';
+        reloadNuxtApp();
+    } catch (e) {
+        console.error("Failed to post comment:", e);
+        alert('Failed to post comment.');
+    } finally {
+        commentPending.value = false;
     }
 };
 </script>
