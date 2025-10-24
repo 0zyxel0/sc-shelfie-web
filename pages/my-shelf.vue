@@ -1,341 +1,334 @@
 <template>
-    <div>
-        <main class="container mx-auto py-8 px-4">
+    <div class="bg-gray-50 text-gray-800">
+
+        <main class="max-w-screen-xl mx-auto py-10 px-4 sm:px-6 lg:px-8">
 
             <!-- Page Header -->
-            <div class="flex flex-col md:flex-row md:justify-between md:items-center mb-8">
-                <div>
-                    <h1 class="text-4xl font-bold text-gray-800">My Shelf</h1>
-                    <p class="mt-1 text-lg text-gray-600">Your personal collection, at a glance.</p>
+            <div class="mb-8">
+                <NuxtLink to="/" class="text-sm text-gray-500 hover:text-gray-700 flex items-center mb-4">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                    </svg>
+                    Back to home
+                </NuxtLink>
+                <h1 class="text-5xl font-bold text-gray-900">My Collection</h1>
+                <p class="mt-2 text-xl text-gray-600">View and manage your collectibles in one organized shelf.</p>
+            </div>
+
+            <!-- Stats Summary -->
+            <div class="mt-8 bg-white border border-gray-200 rounded-lg p-6">
+                <dl class="grid grid-cols-1 md:grid-cols-3 gap-6 text-center divide-y md:divide-y-0 md:divide-x divide-gray-200">
+                    <div class="pt-6 md:pt-0">
+                        <dt class="text-base font-medium text-gray-500">Total Items</dt>
+                        <dd class="mt-1 text-4xl font-semibold text-gray-900 tracking-tight">{{ totalItems }}</dd>
+                    </div>
+                    <div class="pt-6 md:pt-0">
+                        <dt class="text-base font-medium text-gray-500">Categories</dt>
+                        <dd class="mt-1 text-4xl font-semibold text-gray-900 tracking-tight">{{ totalCategories }}</dd>
+                    </div>
+                    <div class="pt-6 md:pt-0">
+                        <dt class="text-base font-medium text-gray-500">Estimated Value</dt>
+                        <dd class="mt-1 text-4xl font-semibold text-gray-900 tracking-tight">{{ formattedEstimatedValue }}</dd>
+                    </div>
+                </dl>
+            </div>
+
+
+            <!-- Search and Filter Bar -->
+            <div class="mt-8 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                <div class="relative flex-grow">
+                    <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                        <svg class="h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clip-rule="evenodd" />
+                        </svg>
+                    </div>
+                    <input type="text" v-model="searchQuery" placeholder="Search by name or tag..." class="w-full pl-11 pr-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500" />
                 </div>
 
-                <!-- Action Buttons Group -->
-                <div class="flex items-center space-x-2 mt-4 md:mt-0">
-                    <NuxtLink to="/items/new" class="flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg transition-colors">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-                        </svg>
-                        Add Item
-                    </NuxtLink>
+                <div class="flex items-center gap-2 flex-shrink-0">
+                    <select v-model="filters.category" class="filter-button appearance-none">
+                        <option value="All">Category</option>
+                        <option v-for="option in categoryOptions.filter(o => o !== 'All')" :key="option" :value="option">{{ option }}</option>
+                    </select>
+                    <select v-model="filters.status" class="filter-button appearance-none">
+                        <option value="All">Status</option>
+                        <option v-for="option in statusOptions.filter(o => o !== 'All')" :key="option" :value="option">{{ option }}</option>
+                    </select>
 
-                    <!-- === NEW: Export Dropdown === -->
-                    <div class="relative" ref="exportMenuRef" @mouseenter="showPremiumHint = !isPremium" @mouseleave="showPremiumHint = false">
-                        <button @click="isExportMenuOpen = !isExportMenuOpen" :disabled="!isPremium" class="flex items-center justify-center bg-white border border-gray-300 hover:bg-gray-100 text-gray-700 font-bold py-3 px-4 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                    <div class="flex items-center bg-gray-200 rounded-lg p-1 ml-2">
+                        <button @click="viewMode = 'grid'" :class="[viewMode === 'grid' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-500', 'p-1.5 rounded-md']">
+                            <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                                <path d="M5 3a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2V5a2 2 0 00-2-2H5zM5 11a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2v-2a2 2 0 00-2-2H5zM11 5a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V5zM11 13a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
                             </svg>
                         </button>
+                        <button @click="viewMode = 'list'" :class="[viewMode === 'list' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-500', 'p-1.5 rounded-md']">
+                            <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clip-rule="evenodd" />
+                            </svg>
+                        </button>
+                    </div>
 
-                        <!-- Export Dropdown for Premium Users -->
-                        <div v-if="isExportMenuOpen && isPremium" class="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-xl z-20">
-                            <div class="py-1">
-                                <a href="#" @click.prevent="exportToCSV" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Export as CSV</a>
-                                <a href="#" @click.prevent="exportToPDF" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Export as PDF</a>
-                            </div>
+                    <NuxtLink to="/items/new" class="flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-5 rounded-lg transition-colors ml-4">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                        </svg>
+                        Add New Item
+                    </NuxtLink>
+                </div>
+            </div>
+
+            <!-- Content Area -->
+            <div class="mt-6">
+                <!-- Loading State -->
+                <div v-if="itemsPending" class="text-center text-gray-500 py-10">
+                    Loading your items...
+                </div>
+
+                <!-- Empty State -->
+                <div v-else-if="!items || items.length === 0" class="text-center bg-white p-10 rounded-lg border border-gray-200">
+                    <h3 class="text-xl font-semibold text-gray-800">Your collection is empty!</h3>
+                    <p class="text-gray-500 mt-2">Start by adding your first collectible.</p>
+                    <NuxtLink to="/items/new" class="mt-4 inline-block bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg">Add Your First Item</NuxtLink>
+                </div>
+
+                <!-- Items Display -->
+                <div v-else>
+                    <div v-if="filteredItems.length === 0" class="text-center bg-white p-10 rounded-lg border border-gray-200">
+                        <h3 class="text-xl font-semibold text-gray-800">No items match your search or filters</h3>
+                        <p class="text-gray-500 mt-2">Try adjusting your criteria.</p>
+                    </div>
+
+                    <!-- GRID VIEW -->
+                    <div v-else-if="viewMode === 'grid'" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                        <div v-for="item in filteredItems" :key="item.id" class="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm hover:shadow-lg transition-shadow duration-300">
+                            <NuxtLink :to="`/items/${item.id}`" class="block hover:underline">
+                                <div class="relative">
+                                    <img :src="item.userImages[0]?.url || 'https://via.placeholder.com/400x300'" :alt="item.name" class="w-full h-56 object-cover">
+                                    <div class="absolute bottom-3 right-3 bg-black bg-opacity-60 text-white text-xs font-semibold px-2 py-1 rounded-full flex items-center">
+                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-4">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="m2.25 15.75 5.159-5.159a2.25 2.25 0 0 1 3.182 0l5.159 5.159m-1.5-1.5 1.409-1.409a2.25 2.25 0 0 1 3.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 0 0 1.5-1.5V6a1.5 1.5 0 0 0-1.5-1.5H3.75A1.5 1.5 0 0 0 2.25 6v12a1.5 1.5 0 0 0 1.5 1.5Zm10.5-11.25h.008v.008h-.008V8.25Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z" />
+                                        </svg>
+
+                                        {{ item.userImages.length }}
+                                    </div>
+                                    <span :class="getStatusClass(item.itemStatus)" class="absolute top-3 left-3 text-xs font-semibold px-2.5 py-1 rounded-full">
+                                        {{ item.itemStatus }}
+                                    </span>
+                                </div>
+                                <div class="p-4">
+                                    <h3 class="font-bold text-lg text-gray-900 truncate">{{ item.name }}</h3>
+                                    <p class="text-sm text-gray-500">{{ item.categories[0] || 'Uncategorized' }}</p>
+                                    <div class="mt-3 flex flex-wrap gap-2">
+                                        <span v-for="tag in item.itags.slice(0, 3)" :key="tag" class="bg-gray-100 text-gray-600 text-xs font-medium px-2.5 py-1 rounded-full">
+                                            {{ tag }}
+                                        </span>
+                                    </div>
+                                </div>
+                            </NuxtLink>
                         </div>
+                    </div>
 
-                        <!-- Premium Hint/Tooltip for Free Users -->
-                        <div v-if="showPremiumHint" class="absolute right-0 mt-2 w-64 bg-gray-800 text-white rounded-md shadow-xl z-20 p-4">
-                            <h4 class="font-bold text-md">Premium Feature</h4>
-                            <p class="text-sm mt-1">Export your collection to CSV or PDF with a Premium subscription.</p>
-                            <NuxtLink to="/go-premium" class="mt-3 inline-block bg-yellow-500 hover:bg-yellow-600 text-gray-900 font-bold py-2 px-4 rounded-lg text-sm">
-                                Go Premium
+                    <!-- LIST VIEW -->
+                    <div v-else-if="viewMode === 'list'" class="space-y-4">
+                        <div v-for="item in filteredItems" :key="item.id" class="bg-white rounded-lg border border-gray-200 p-4 flex items-center space-x-6 hover:shadow-md transition-shadow duration-300">
+                            <NuxtLink :to="`/items/${item.id}`" class="flex items-center space-x-6 w-full hover:underline">
+                                <div class="relative flex-shrink-0">
+                                    <img :src="item.userImages[0]?.url || 'https://via.placeholder.com/150'" :alt="item.name" class="w-24 h-24 rounded-md object-cover">
+                                    <div class="absolute bottom-1 right-1 bg-black bg-opacity-60 text-white text-xs font-semibold px-2 py-1 rounded-full flex items-center">
+                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-4">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="m2.25 15.75 5.159-5.159a2.25 2.25 0 0 1 3.182 0l5.159 5.159m-1.5-1.5 1.409-1.409a2.25 2.25 0 0 1 3.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 0 0 1.5-1.5V6a1.5 1.5 0 0 0-1.5-1.5H3.75A1.5 1.5 0 0 0 2.25 6v12a1.5 1.5 0 0 0 1.5 1.5Zm10.5-11.25h.008v.008h-.008V8.25Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z" />
+                                        </svg>
+
+                                        {{ item.userImages.length }}
+                                    </div>
+                                </div>
+                                <div class="flex-grow">
+                                    <span :class="getStatusClass(item.itemStatus)" class="text-xs font-semibold px-2.5 py-1 rounded-full">{{ item.itemStatus }}</span>
+                                    <h3 class="font-bold text-lg text-gray-900 mt-2">{{ item.name }}</h3>
+                                    <p class="text-sm text-gray-500">{{ item.categories[0] || 'Uncategorized' }}</p>
+                                    <div class="mt-3 flex flex-wrap gap-2">
+                                        <span v-for="tag in item.itags" :key="tag" class="bg-gray-100 text-gray-600 text-xs font-medium px-2.5 py-1 rounded-full">
+                                            {{ tag }}
+                                        </span>
+                                    </div>
+                                </div>
                             </NuxtLink>
                         </div>
                     </div>
                 </div>
             </div>
+        </main>
 
-            <!-- Loading State -->
-            <div v-if="userLoading || itemsPending" class="text-center text-gray-500 py-10">
-                Loading your items...
-            </div>
-
-            <!-- Empty State (No items at all) -->
-            <div v-else-if="!items || items.length === 0" class="text-center bg-white p-10 rounded-lg shadow-sm">
-                <h3 class="text-xl font-semibold text-gray-800">Your shelf is empty!</h3>
-                <p class="text-gray-500 mt-2">Start by adding your first item.</p>
-                <NuxtLink to="/items/new" class="mt-4 inline-block bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg">Add Your First Item</NuxtLink>
-            </div>
-
-            <!-- Main Content Area with INLINE Filters -->
-            <div v-else class="flex flex-col lg:flex-row gap-8 items-start">
-                <div class="w-full lg:w-64 xl:w-72 flex-shrink-0">
-                    <div class="sticky top-24 bg-white p-4 rounded-lg shadow-md">
-                        <h3 class="text-lg font-bold text-gray-800 mb-4">Filter My Shelf</h3>
-                        <!-- Only show filters if there's more than one distinct option (including "All") -->
-                        <div v-if="manufacturerOptions.length > 1 || categoryOptions.length > 1 || seriesOptions.length > 1 || tagOptions.length > 1">
-                            <div class="mb-4">
-                                <label class="block text-sm font-semibold text-gray-700 mb-1">Status</label>
-                                <select v-model="filters.status" class="filter-select">
-                                    <option v-for="option in statusOptions" :key="option" :value="option">{{ option }}</option>
-                                </select>
+        <!-- Footer (Placeholder based on UI) -->
+        <footer class="bg-gray-900 text-gray-400">
+            <div class="max-w-screen-xl mx-auto py-12 px-4 sm:px-6 lg:px-8">
+                <div class="xl:grid xl:grid-cols-3 xl:gap-8">
+                    <div class="space-y-8 xl:col-span-1">
+                        <span class="text-3xl font-bold text-white">Shelfie</span>
+                        <p class="text-gray-400 text-base">The ultimate digital shelf for collectors.</p>
+                        <div class="flex space-x-6">
+                            <!-- Social Icons -->
+                        </div>
+                    </div>
+                    <div class="mt-12 grid grid-cols-2 gap-8 xl:mt-0 xl:col-span-2">
+                        <div class="md:grid md:grid-cols-2 md:gap-8">
+                            <div>
+                                <h3 class="text-sm font-semibold text-gray-200 tracking-wider uppercase">Company</h3>
+                                <ul class="mt-4 space-y-4">
+                                    <li><a href="#" class="text-base text-gray-400 hover:text-white">About</a></li>
+                                    <li><a href="#" class="text-base text-gray-400 hover:text-white">Careers</a></li>
+                                    <li><a href="#" class="text-base text-gray-400 hover:text-white">Blog</a></li>
+                                    <li><a href="#" class="text-base text-gray-400 hover:text-white">Press</a></li>
+                                </ul>
                             </div>
-                            <div v-if="categoryOptions.length > 1" class="mb-4">
-                                <label class="block text-sm font-semibold text-gray-700 mb-1">Category</label>
-                                <select v-model="filters.category" class="filter-select">
-                                    <option v-for="option in categoryOptions" :key="option" :value="option">{{ option }}</option>
-                                </select>
-                            </div>
-                            <div v-if="manufacturerOptions.length > 1" class="mb-4">
-                                <label class="block text-sm font-semibold text-gray-700 mb-1">Manufacturer</label>
-                                <select v-model="filters.manufacturer" class="filter-select">
-                                    <option v-for="option in manufacturerOptions" :key="option" :value="option">{{ option }}</option>
-                                </select>
-                            </div>
-                            <div v-if="seriesOptions.length > 1" class="mb-4">
-                                <label class="block text-sm font-semibold text-gray-700 mb-1">Series</label>
-                                <select v-model="filters.series" class="filter-select">
-                                    <option v-for="option in seriesOptions" :key="option" :value="option">{{ option }}</option>
-                                </select>
-                            </div>
-                            <div v-if="tagOptions.length > 1" class="mb-4">
-                                <label class="block text-sm font-semibold text-gray-700 mb-1">Tag</label>
-                                <select v-model="filters.tag" class="filter-select">
-                                    <option v-for="option in tagOptions" :key="option" :value="option">{{ option }}</option>
-                                </select>
+                            <div class="mt-12 md:mt-0">
+                                <h3 class="text-sm font-semibold text-gray-200 tracking-wider uppercase">Resources</h3>
+                                <ul class="mt-4 space-y-4">
+                                    <li><a href="#" class="text-base text-gray-400 hover:text-white">Features</a></li>
+                                    <li><a href="#" class="text-base text-gray-400 hover:text-white">Pricing</a></li>
+                                    <li><a href="#" class="text-base text-gray-400 hover:text-white">FAQ</a></li>
+                                    <li><a href="#" class="text-base text-gray-400 hover:text-white">Support</a></li>
+                                </ul>
                             </div>
                         </div>
-                        <button @click="resetFilters" class="w-full mt-4 text-sm text-gray-600 hover:text-blue-600 font-semibold">
-                            Reset All Filters
-                        </button>
+                        <div class="md:grid md:grid-cols-1 md:gap-8">
+                            <div>
+                                <h3 class="text-sm font-semibold text-gray-200 tracking-wider uppercase">Legal</h3>
+                                <ul class="mt-4 space-y-4">
+                                    <li><a href="#" class="text-base text-gray-400 hover:text-white">Privacy</a></li>
+                                    <li><a href="#" class="text-base text-gray-400 hover:text-white">Terms</a></li>
+                                    <li><a href="#" class="text-base text-gray-400 hover:text-white">Cookies</a></li>
+                                    <li><a href="#" class="text-base text-gray-400 hover:text-white">Licenses</a></li>
+                                </ul>
+                            </div>
+                        </div>
                     </div>
                 </div>
-                <div class="flex-1 w-full">
-                    <div v-if="filteredItems.length === 0" class="text-center bg-white p-10 rounded-lg shadow-sm">
-                        <h3 class="text-xl font-semibold text-gray-800">No items match your filters</h3>
-                        <p class="text-gray-500 mt-2">Try adjusting or resetting your filters.</p>
-                    </div>
-                    <div v-else class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                        <!-- Assuming ItemCard component is available -->
-                        <ItemCard v-for="item in filteredItems" :key="item.id" :item="item" />
-                    </div>
+                <div class="mt-12 border-t border-gray-700 pt-8">
+                    <p class="text-base text-gray-500 xl:text-center">&copy; {{ new Date().getFullYear() }} Shelfie. All rights reserved.</p>
                 </div>
             </div>
-        </main>
+        </footer>
+
     </div>
 </template>
 
 <script setup>
 import { ref, reactive, computed } from 'vue';
-import { onClickOutside } from '@vueuse/core';
-const { isPremium } = usePremiumStatus();
 
 definePageMeta({ middleware: 'auth' });
-useHead({ title: 'My Shelf | Shelfie' });
+useHead({ title: 'My Collection | Shelfie' });
 
 const user = useStrapiUser();
-const { find } = useStrapi(); // Import useStrapi
+const { find } = useStrapi();
 
-const config = useRuntimeConfig();
+// --- UI STATE ---
+const searchQuery = ref('');
+const viewMode = ref('grid'); // Default to 'grid' view
 
-// --- UTILITY FOR SAFELY EXTRACTING RELATIONS ---
-/**
- * Helper to safely extract attributes from a populated Strapi relation object (V5 structure).
- */
-const getRelationAttributes = (relation) => {
-    if (!relation || !relation.data) return null;
-    if (Array.isArray(relation)) {
-        // Handle many relations (returns array of attributes)
-        return relation.map(entry => ({ id: entry.id, ...entry }));
-    }
-    // Handle single relation (returns single object of attributes)
-    return { id: relation.id, ...relation };
-};
-
-
-// --- DATA FETCHING: ITEMS (Using useStrapi) ---
-
-const { data: itemsResponse, pending: itemsPending, error: itemsError } = await useAsyncData(
+// --- DATA FETCHING (Largely unchanged) ---
+const { data: itemsResponse, pending: itemsPending } = await useAsyncData(
     "my-shelf-all-items",
     async () => {
         const userId = user.value?.id;
-        if (!userId) return null; // Return null to signal no data if user ID is missing
-
-        const itemQueryParams = {
-            // Populate all required relations
-            populate: ['userImages', 'manufacturer', 'character', 'series', 'categories', 'itags'],
-            // Filter by the currently logged-in user ID
+        if (!userId) return null;
+        return await find('items', {
+            populate: ['userImages', 'categories', 'itags'],
             filters: { user: { id: { '$eq': userId } } },
-            pagination: { pageSize: 2500 }, // Fetch enough for the whole shelf
+            pagination: { pageSize: 2500 },
             sort: ['createdAt:desc'],
-        };
-
-        return await find('items', itemQueryParams);
+        });
     },
     {
         transform: (response) => {
-            console.log("Raw items response:", response);
             if (!response?.data) return [];
-
-            return response.data.map((rawItem) => {
-                const item = rawItem;
-
-                const transformedItem = { id: item.id, ...item };
-                transformedItem.manufacturer = transformedItem.manufacturer?.name || null;
-                transformedItem.series = transformedItem.series?.name || null;
-                transformedItem.categories = transformedItem.categories?.length
-                    ? transformedItem.categories.map(cat => cat.name)
-                    : [];
-                transformedItem.itags = transformedItem.itags?.length
-                    ? transformedItem.itags.map(tag => tag.name)
-                    : [];
-                transformedItem.character = transformedItem.character?.name || null;
-                transformedItem.userImages = transformedItem.userImages?.length
-                    ? transformedItem.userImages.map(img => ({
-                        id: img.id,
-                        url: img.url,
-                    }))
-                    : [];
-                return transformedItem;
-            });
+            return response.data.map((item) => ({
+                id: item.documentId,
+                name: item.name,
+                itemStatus: item.itemStatus || 'Owned',
+                purchasePrice: item.purchasePrice,
+                categories: item.categories?.map(c => c.name) || [],
+                itags: item.itags?.map(t => t.name) || [],
+                userImages: item.userImages?.map(img => ({ id: img.id, url: img.url })) || [],
+            }));
         },
-        // Re-fetch whenever the user ID changes (i.e., when fetchUser resolves)
         watch: [() => user.value?.id],
-        server: true,
     }
 );
-
 const items = computed(() => itemsResponse.value || []);
-console.log("Transformed items:", items);
 
-// --- Filter State & Logic (Unchanged) ---
+
+// --- COMPUTED PROPERTIES FOR STATS ---
+const totalItems = computed(() => items.value?.length || 0);
+const totalCategories = computed(() => {
+    if (!items.value) return 0;
+    const allCategories = items.value.flatMap(item => item.categories);
+    return new Set(allCategories).size;
+});
+const estimatedValue = computed(() => {
+    if (!items.value) return 0;
+    return items.value.reduce((total, item) => total + (Number(item.purchasePrice) || 0), 0);
+});
+const formattedEstimatedValue = computed(() => {
+    return new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency: 'USD',
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0,
+    }).format(estimatedValue.value);
+});
+
+
+// --- FILTERING LOGIC ---
 const filters = reactive({
     status: 'All',
     category: 'All',
-    manufacturer: 'All',
-    series: 'All',
-    tag: 'All',
 });
+
 const statusOptions = computed(() => {
     const statuses = new Set(items.value?.map(item => item.itemStatus) || []);
     return ['All', ...Array.from(statuses).sort()];
 });
-console.log("Status Options:", statusOptions.value);
+
 const categoryOptions = computed(() => {
     const categories = new Set();
     items.value?.forEach(item => item.categories.forEach(cat => categories.add(cat)));
     return ['All', ...Array.from(categories).sort()];
 });
-console.log("Category Options:", categoryOptions.value);
-const manufacturerOptions = computed(() => {
-    const manufacturers = new Set(items.value?.map(item => item.manufacturer).filter(Boolean) || []);
-    return ['All', ...Array.from(manufacturers).sort()];
-});
-console.log("Manufacturer Options:", manufacturerOptions.value);
-const seriesOptions = computed(() => {
-    const seriesList = new Set(items.value?.map(item => item.series).filter(Boolean) || []);
-    return ['All', ...Array.from(seriesList).sort()];
-});
-console.log("Series Options:", seriesOptions.value);
-const tagOptions = computed(() => {
-    const tags = new Set();
-    items.value?.forEach(item => item.itags.forEach(tag => tags.add(tag)));
-    return ['All', ...Array.from(tags).sort()];
-});
-console.log("Tag Options:", tagOptions.value);
+
 const filteredItems = computed(() => {
     if (!items.value) return [];
+    const lowerCaseQuery = searchQuery.value.toLowerCase();
+
     return items.value.filter(item => {
         const matchesStatus = filters.status === 'All' || item.itemStatus === filters.status;
         const matchesCategory = filters.category === 'All' || item.categories.includes(filters.category);
-        const matchesManufacturer = filters.manufacturer === 'All' || item.manufacturer === filters.manufacturer;
-        const matchesSeries = filters.series === 'All' || item.series === filters.series;
-        const matchesTag = filters.tag === 'All' || item.itags.includes(filters.tag);
-        return matchesStatus && matchesCategory && matchesManufacturer && matchesSeries && matchesTag;
+        const matchesSearch = lowerCaseQuery === '' ||
+            item.name.toLowerCase().includes(lowerCaseQuery) ||
+            item.itags.some(tag => tag.toLowerCase().includes(lowerCaseQuery));
+
+        return matchesStatus && matchesCategory && matchesSearch;
     });
 });
-const resetFilters = () => {
-    filters.status = 'All';
-    filters.category = 'All';
-    filters.manufacturer = 'All';
-    filters.series = 'All';
-    filters.tag = 'All';
-};
 
-// --- Export Dropdown Logic (Unchanged) ---
-const isExportMenuOpen = ref(false);
-const showPremiumHint = ref(false);
-const exportMenuRef = ref(null);
-onClickOutside(exportMenuRef, () => {
-    isExportMenuOpen.value = false;
-    showPremiumHint.value = false; // Fix: Reset showPremiumHint on click outside
-});
-
-// --- CLIENT-SIDE EXPORT FUNCTIONS (Unchanged) ---
-const exportToCSV = async () => {
-    if (process.server) return;
-    if (!isPremium.value) {
-        alert("This is a premium feature.");
-        return;
+// Helper for card styling
+const getStatusClass = (status) => {
+    switch (status) {
+        case 'Owned': return 'bg-green-100 text-green-800';
+        case 'Wishlist': return 'bg-blue-100 text-blue-800';
+        case 'For Trade': return 'bg-orange-100 text-orange-800';
+        default: return 'bg-gray-100 text-gray-800';
     }
-    const Papa = await import('papaparse').then(m => m.default || m);
-    if (filteredItems.value.length === 0) {
-        alert("No items to export.");
-        return;
-    }
-    const dataForExport = filteredItems.value.map(item => ({
-        Name: item.name,
-        Status: item.itemStatus,
-        Manufacturer: item.manufacturer || 'N/A',
-        Series: item.series || 'N/A',
-        Character: item.character || 'N/A',
-        PurchasePrice: item.purchasePrice || 0,
-        PurchaseDate: item.purchaseDate ? new Date(item.purchaseDate).toLocaleDateString() : 'N/A',
-        itags: item.itags.join(' | '),
-    }));
-    const csv = Papa.unparse(dataForExport);
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement("a");
-    link.href = URL.createObjectURL(blob);
-    link.download = "shelfie_collection.csv";
-    link.click();
-    URL.revokeObjectURL(link.href);
-    isExportMenuOpen.value = false;
-};
-
-const exportToPDF = async () => {
-    if (process.server) return;
-    if (!isPremium.value) {
-        alert("This is a premium feature.");
-        return;
-    }
-    const { default: jsPDF } = await import('jspdf');
-    const { default: autoTable } = await import('jspdf-autotable');
-    if (filteredItems.value.length === 0) {
-        alert("No items to export.");
-        return;
-    }
-    const doc = new jsPDF();
-    doc.setFontSize(18);
-    doc.text(`${user.value.username}'s Shelfie Collection`, 14, 22);
-    doc.setFontSize(11);
-    doc.setTextColor(100);
-    const filterText = `Current Filter: ${filters.status}`;
-    doc.text(filterText, 14, 30);
-    const tableColumn = ["Name", "Status", "Manufacturer", "Series", "Price"];
-    const tableRows = filteredItems.value.map(item => [
-        item.name,
-        item.itemStatus,
-        item.manufacturer || '-',
-        item.series || '-',
-        item.purchasePrice ? `$${item.purchasePrice}` : '-',
-    ]);
-    autoTable(doc, {
-        head: [tableColumn],
-        body: tableRows,
-        startY: 35,
-        theme: 'grid',
-        styles: { fontSize: 8 },
-        headStyles: { fillColor: [40, 120, 190] },
-    });
-    doc.save('shelfie_collection.pdf');
-    isExportMenuOpen.value = false;
-};
+}
 </script>
 
 <style scoped>
-.filter-select {
-    @apply w-full border-gray-300 rounded-md shadow-sm text-sm focus:ring-blue-500 focus:border-blue-500;
+.filter-button {
+    @apply flex items-center bg-white border border-gray-300 rounded-lg px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500;
+}
+
+select.filter-button {
+    @apply pr-8;
+    /* Add padding for the default arrow */
 }
 </style>

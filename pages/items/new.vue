@@ -98,6 +98,12 @@
                     <textarea v-model="form.description" id="description" rows="4" class="form-input" placeholder="Any details like box condition, specific version, etc."></textarea>
                 </div>
 
+                <!-- Review -->
+                <div class="mb-6">
+                    <label for="review" class="block text-gray-700 text-sm font-bold mb-2">Personal Review</label>
+                    <textarea v-model="form.review" id="review" rows="4" class="form-input" placeholder="Any personal review, item condition, feedback, etc."></textarea>
+                </div>
+
                 <!-- isPrivate Toggle Switch -->
                 <div class="mb-6">
                     <label for="isPrivate" class="flex items-center cursor-pointer">
@@ -167,6 +173,7 @@ const form = reactive({
     name: '',
     itemStatus: 'Owned',
     description: '',
+    review: '',
     purchasePrice: null,
     purchaseDate: null,
     files: [], // Crucial: This field exists on the reactive form state
@@ -246,6 +253,7 @@ const handleSubmit = async () => {
                 name: form.name,
                 itemStatus: form.itemStatus,
                 description: form.description,
+                review: form.review,
                 purchasePrice: form.purchasePrice,
                 purchaseDate: form.purchaseDate,
                 isPrivate: form.isPrivate,

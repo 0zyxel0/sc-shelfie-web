@@ -197,7 +197,7 @@ const resendStatus = ref('idle'); // 'idle', 'sending', 'success', 'error'
 const resendEmail = async () => {
   resendStatus.value = 'sending';
   try {
-    await client('/profile/resend-verification-email', { method: 'POST' });
+    await client('/users/resend-verification-email', { method: 'POST' });
     resendStatus.value = 'success';
     setTimeout(() => { resendStatus.value = 'idle'; }, 5000);
   } catch (e) {

@@ -4,9 +4,12 @@
   <header class="bg-white shadow-sm sticky top-0 z-40">
     <div class="container mx-auto px-4 sm:px-6 lg:px-8">
       <div class="flex justify-between items-center h-16">
-        <NuxtLink to="/" class="text-2xl font-bold text-gray-800 tracking-tighter">
-          Shelfie
+
+        <NuxtLink to="/">
+          <a class="text-2xl font-bold text-black-600">Shelf</a>
+          <a class="text-2xl font-bold text-blue-600">ie </a>
         </NuxtLink>
+
 
         <div class="flex-1 px-4 lg:px-8">
           <form @submit.prevent="performSearch">
@@ -24,10 +27,11 @@
         <div class="flex items-center space-x-2 md:space-x-6">
           <template v-if="user">
             <nav class="hidden md:flex items-center space-x-6 text-sm font-medium text-gray-600">
-              <NuxtLink to="/feed" class="hover:text-blue-500" active-class="text-blue-600 font-semibold">Feed</NuxtLink>
-              <NuxtLink to="/my-shelf" class="hover:text-blue-500" active-class="text-blue-600 font-semibold">My Shelf</NuxtLink>
-              <NuxtLink to="/calendar" class="hover:text-blue-500" active-class="text-blue-600 font-semibold">Calendar</NuxtLink>
-              <NuxtLink to="/profile" class="hover:text-blue-500" active-class="text-blue-600 font-semibold">Profile</NuxtLink>
+              <NuxtLink to="/showcase" class="text-gray-600 hover:text-blue-600" active-class="text-blue-600 font-semibold">Latest</NuxtLink>
+              <NuxtLink to="/feed" class="text-gray-600 hover:text-blue-600" active-class="text-blue-600 font-semibold">Feed</NuxtLink>
+              <NuxtLink to="/my-shelf" class="text-gray-600 hover:text-blue-600" active-class="text-blue-600 font-semibold">My Shelf</NuxtLink>
+              <NuxtLink to="/calendar" class="text-gray-600 hover:text-blue-600" active-class="text-blue-600 font-semibold">Calendar</NuxtLink>
+              <NuxtLink to="/profile" class="text-gray-600 hover:text-blue-600" active-class="text-blue-600 font-semibold">Profile</NuxtLink>
             </nav>
 
             <!-- --- FIX: Hide button if user is already premium --- -->
