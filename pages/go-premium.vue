@@ -52,31 +52,25 @@
     </div>
 </template>
 
+<!-- template remains the same -->
 <script setup>
-import { ref } from 'vue';
+import { ref, onMounted } from 'vue';
 
 useHead({ title: 'Go Premium | Shelfie' });
 definePageMeta({ middleware: 'auth' });
 
 const isLoading = ref(false);
 const paymentError = ref(null);
-const paymentStatus = ref(null);
 const route = useRoute();
-// We use useStrapiUser for consistency, assuming its reactivity is reliable
+const client = useStrapiClient();
 const user = useStrapiUser();
-const selectedPlan = ref('monthly'); // 'monthly' or 'annually'
+const selectedPlan = ref('monthly');
 
+// Simplified onMounted - just shows a generic cancelled message if needed
 onMounted(() => {
-    if (route.query.status === 'success') {
-        paymentStatus.value = 'success';
-        // TODO: Here you would call another secure server route to finalize the payment 
-        // and update the user's subscription in Strapi, potentially using the
-        // checkoutSessionId stored in sessionStorage.
-    } else if (route.query.status === 'cancelled') {
-        paymentStatus.value = 'cancelled';
+    if (route.query.status === 'cancelled') {
+        paymentError.value = "Your payment was cancelled. Feel free to try again.";
     }
-    // Clean up session storage after reading/processing
-    sessionStorage.removeItem('paymongo_checkout_session_id');
 });
 
 const handleGoPremium = async () => {
@@ -90,18 +84,18 @@ const handleGoPremium = async () => {
     }
 
     try {
-        // --- UPDATED: Send the selected plan to the BFF endpoint ---
-        const response = await $fetch('/api/paymongo/create-checkout', {
+        const response = await client('/paymongo/create-checkout-session', {
             method: 'POST',
             body: {
                 plan: selectedPlan.value,
-                user: user.value
-            }
+            },
         });
-        // --------------------------------------------------------
 
+        console.log("Checkout Session Response:", response);
+
+        // MODIFIED: Now we expect both checkoutUrl and checkoutSessionId
         if (response.checkoutUrl && response.checkoutSessionId) {
-            // Store the session ID BEFORE redirecting
+            // CRITICAL: Store the session ID before redirecting
             sessionStorage.setItem('paymongo_checkout_session_id', response.checkoutSessionId);
 
             // Redirect the user
@@ -112,8 +106,7 @@ const handleGoPremium = async () => {
 
     } catch (e) {
         console.error("Payment initiation failed:", e);
-        // Handle server-side errors returned by the Nitro route
-        paymentError.value = e.data?.statusMessage || e.message || "An unexpected error occurred. Please try again.";
+        paymentError.value = e.data?.error?.message || e.message || "An unexpected error occurred. Please try again.";
         isLoading.value = false;
     }
 };

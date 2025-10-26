@@ -91,50 +91,90 @@ const password = ref('')
 const confirmPassword = ref('')
 const isRegisterMode = ref(false)
 const errorMessage = ref(null)
-const isLoading = ref(false) // <-- NEW: State for the loading indicator
+const isLoading = ref(false)
 
-// Computed property to check if passwords match
 const passwordMismatch = computed(() => {
     return isRegisterMode.value && password.value !== confirmPassword.value && confirmPassword.value.length > 0;
 })
 
+// --- NEW: Helper function to translate Strapi errors ---
+/**
+ * Takes a Strapi error object and returns a user-friendly string.
+ * @param {Error} error The error object caught from the API call.
+ * @returns {string} A user-friendly error message.
+ */
+const mapStrapiError = (error) => {
+    // First, handle network errors where there's no response object\
+    console.log("Mapping Strapi Error:", error);
+    // if (!error.error) {
+    //     console.error("Network Error:", error.message);
+    //     return 'Could not connect to the server. Please check your internet connection.';
+    // }
+
+    // Get the core error details from Strapi's response
+    const errorDetails = error.error;
+    if (!errorDetails) {
+        return 'An unexpected server error occurred. Please try again.';
+    }
+
+    // Use the specific message from Strapi to determine the user-friendly text
+    const message = (errorDetails.message || '').toLowerCase();
+
+    switch (message) {
+        case 'invalid identifier or password':
+            return 'Incorrect email or password. Please try again.';
+
+        // Registration-specific errors
+        case 'email is already taken':
+            return 'This email address is already registered. Please try logging in instead.';
+        case 'username is already taken':
+            return 'This username is not available. Please choose another one.';
+
+        // Common validation errors (we use .includes() for flexibility)
+        default:
+            if (message.includes('password must be at least')) {
+                return 'Password is too short. It must be at least 6 characters long.';
+            }
+            if (message.includes('must be a valid email')) {
+                return 'Please enter a valid email address.';
+            }
+            // Fallback to the original Strapi message if it's something unexpected
+            return errorDetails.message || 'An unknown error occurred.';
+    }
+}
+
 const handleAuth = async () => {
     errorMessage.value = null
-    isLoading.value = true; // <-- NEW: Show the loading modal
+    isLoading.value = true;
 
     try {
-        // Pre-check for registration mode
         if (isRegisterMode.value) {
-            if (password.value !== confirmPassword.value) {
-                errorMessage.value = 'Password and confirmation password do not match.';
-                // We return here but the finally block will still execute
+            if (passwordMismatch.value) {
+                // This error is client-side, so we set it directly
+                errorMessage.value = 'Passwords do not match.';
+                // No need to throw, just return to stop execution
                 return;
             }
 
-            // Strapi registration call
-            const data = await register({
+            // Await the register function directly. If it fails, it will throw an error
+            // which will be caught by the catch block.
+            await register({
                 username: username.value,
                 email: email.value,
                 password: password.value
             });
-            if (data.error) {
-                throw new Error(data.error.message);
-            }
             router.push('/profile/edit')
 
         } else {
-            // Strapi login call
-            const result = await login({ identifier: email.value, password: password.value })
-            if (result) {
-                router.push('/my-shelf');
-            }
+            // Await the login function. It will also throw an error on failure.
+            await login({ identifier: email.value, password: password.value })
+            router.push('/my-shelf');
         }
     } catch (e) {
-        // Handle Strapi errors
-        errorMessage.value = e.response?.data?.error?.message || e.message || 'An unexpected error occurred during authentication.'
-        console.error("Auth Error:", e);
+        // --- UPDATED: Use the new helper function ---
+        errorMessage.value = mapStrapiError(e);
+        console.error("Auth Error:", e.response?.data || e.message);
     } finally {
-        // <-- NEW: Use a finally block to ensure the loader is always hidden
         isLoading.value = false;
     }
 }
