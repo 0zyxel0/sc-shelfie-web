@@ -81,7 +81,7 @@ onMounted(async () => {
 
         if (response.success) {
             verificationSuccess.value = true;
-            reloadNuxtApp(); // Refresh to update premium status
+            router.push("/my-shelf"); // Force reload to reflect premium status
         } else {
             throw new Error(response.message || 'Verification was not successful.');
         }
