@@ -81,7 +81,7 @@ onMounted(async () => {
 
         if (response.success) {
             verificationSuccess.value = true;
-            refreshNuxtApp(); // Refresh to update premium status
+            reloadNuxtApp(); // Refresh to update premium status
         } else {
             throw new Error(response.message || 'Verification was not successful.');
         }
