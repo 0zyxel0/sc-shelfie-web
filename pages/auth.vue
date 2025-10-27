@@ -6,6 +6,24 @@
     </div>
     <!-- END: Loading Modal Indicator -->
 
+    <!-- START: NEW Confirmation Modal -->
+    <div v-if="showConfirmationModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" @click="showConfirmationModal = false">
+        <div class="bg-white p-8 rounded-lg shadow-md w-full max-w-md text-center" @click.stop>
+            <svg class="w-16 h-16 mx-auto text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>
+            <h2 class="text-2xl font-bold mt-4 mb-2">Registration Successful!</h2>
+            <p class="text-gray-700 mb-6">
+                Please check your email to confirm your account before logging in.
+            </p>
+            <button @click="showConfirmationModal = false" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline">
+                Got it!
+            </button>
+        </div>
+    </div>
+    <!-- END: NEW Confirmation Modal -->
+
+
     <div class="min-h-screen flex items-center justify-center bg-gray-100">
         <div class="bg-white p-8 rounded-lg shadow-md w-full max-w-md">
 
@@ -93,44 +111,43 @@ const isRegisterMode = ref(false)
 const errorMessage = ref(null)
 const isLoading = ref(false)
 
+// --- NEW: State for confirmation modal ---
+const showConfirmationModal = ref(false)
+
 const passwordMismatch = computed(() => {
     return isRegisterMode.value && password.value !== confirmPassword.value && confirmPassword.value.length > 0;
 })
 
-// --- NEW: Helper function to translate Strapi errors ---
+// --- NEW: Helper function to clear form fields ---
+const clearForm = () => {
+    username.value = '';
+    email.value = '';
+    password.value = '';
+    confirmPassword.value = '';
+    errorMessage.value = null; // Also clear any previous errors
+};
+
 /**
  * Takes a Strapi error object and returns a user-friendly string.
  * @param {Error} error The error object caught from the API call.
  * @returns {string} A user-friendly error message.
  */
 const mapStrapiError = (error) => {
-    // First, handle network errors where there's no response object\
     console.log("Mapping Strapi Error:", error);
-    // if (!error.error) {
-    //     console.error("Network Error:", error.message);
-    //     return 'Could not connect to the server. Please check your internet connection.';
-    // }
-
-    // Get the core error details from Strapi's response
     const errorDetails = error.error;
     if (!errorDetails) {
         return 'An unexpected server error occurred. Please try again.';
     }
 
-    // Use the specific message from Strapi to determine the user-friendly text
     const message = (errorDetails.message || '').toLowerCase();
 
     switch (message) {
         case 'invalid identifier or password':
             return 'Incorrect email or password. Please try again.';
-
-        // Registration-specific errors
         case 'email is already taken':
             return 'This email address is already registered. Please try logging in instead.';
         case 'username is already taken':
             return 'This username is not available. Please choose another one.';
-
-        // Common validation errors (we use .includes() for flexibility)
         default:
             if (message.includes('password must be at least')) {
                 return 'Password is too short. It must be at least 6 characters long.';
@@ -138,7 +155,6 @@ const mapStrapiError = (error) => {
             if (message.includes('must be a valid email')) {
                 return 'Please enter a valid email address.';
             }
-            // Fallback to the original Strapi message if it's something unexpected
             return errorDetails.message || 'An unknown error occurred.';
     }
 }
@@ -150,28 +166,34 @@ const handleAuth = async () => {
     try {
         if (isRegisterMode.value) {
             if (passwordMismatch.value) {
-                // This error is client-side, so we set it directly
                 errorMessage.value = 'Passwords do not match.';
-                // No need to throw, just return to stop execution
                 return;
             }
 
-            // Await the register function directly. If it fails, it will throw an error
-            // which will be caught by the catch block.
             await register({
                 username: username.value,
                 email: email.value,
                 password: password.value
             });
-            router.push('/profile/edit')
+
+            // --- MODIFIED: Handle successful registration with email confirmation ---
+            // 1. Show the confirmation modal
+            showConfirmationModal.value = true;
+
+            // 2. Clear the form fields
+            clearForm();
+
+            // 3. Switch back to login mode so the user can log in after confirming
+            isRegisterMode.value = false;
+
+            // Old redirect logic removed:
+            // router.push('/profile/edit')
 
         } else {
-            // Await the login function. It will also throw an error on failure.
             await login({ identifier: email.value, password: password.value })
             router.push('/my-shelf');
         }
     } catch (e) {
-        // --- UPDATED: Use the new helper function ---
         errorMessage.value = mapStrapiError(e);
         console.error("Auth Error:", e.response?.data || e.message);
     } finally {
