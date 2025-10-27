@@ -53,6 +53,7 @@ import { ref, onMounted } from 'vue';
 
 useHead({ title: 'Verifying Payment | Shelfie' });
 definePageMeta({ middleware: 'auth' });
+const router = useRouter()
 
 const client = useStrapiClient();
 const isVerifying = ref(true);
@@ -81,7 +82,7 @@ onMounted(async () => {
 
         if (response.success) {
             verificationSuccess.value = true;
-            router.push('/my-shelf'); // Refresh to update premium status
+            window.location.href = '/my-shelf'; // Refresh to update premium status
         } else {
             throw new Error(response.message || 'Verification was not successful.');
         }
