@@ -68,6 +68,38 @@
                         </button>
                     </div>
 
+                    <div class="relative ml-2">
+                        <!-- Premium User View -->
+                        <div v-if="isPremium">
+                            <button @click="showExportMenu = !showExportMenu" type="button" class="filter-button inline-flex items-center gap-2">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                                </svg>
+                                Export
+                            </button>
+                            <div v-if="showExportMenu" @click="showExportMenu = false" class="absolute right-0 mt-2 w-48 origin-top-right rounded-md bg-white shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none z-10">
+                                <div class="py-1" role="none">
+                                    <a href="#" @click.prevent="exportToCSV" class="text-gray-700 hover:bg-gray-100 block px-4 py-2 text-sm" role="menuitem">Export as CSV</a>
+                                    <a href="#" @click.prevent="exportToPDF" class="text-gray-700 hover:bg-gray-100 block px-4 py-2 text-sm" role="menuitem">Export as PDF</a>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- Non-Premium User View (Upsell) -->
+                        <div v-else class="relative group">
+                            <button type="button" disabled class="filter-button inline-flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z" />
+                                </svg>
+                                Export
+                            </button>
+                            <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-60 bg-gray-800 text-white text-center text-sm rounded-lg py-2 px-3 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none">
+                                Upgrade to Premium to export your collection.
+                                <NuxtLink to="/pricing" class="font-bold text-blue-400 hover:underline">Upgrade Now</NuxtLink>
+                                <div class="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-x-8 border-x-transparent border-t-8 border-t-gray-800"></div>
+                            </div>
+                        </div>
+                    </div>
+
                     <NuxtLink to="/items/new" class="flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-5 rounded-lg transition-colors ml-4">
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
@@ -222,9 +254,11 @@ useHead({ title: 'My Collection | Shelfie' });
 const user = useStrapiUser();
 const { find } = useStrapi();
 
+const { isPremium } = usePremiumStatus();
 // --- UI STATE ---
 const searchQuery = ref('');
 const viewMode = ref('grid'); // Default to 'grid' view
+const showExportMenu = ref(false); // New state for export dropdown
 
 // --- DATA FETCHING (Largely unchanged) ---
 const { data: itemsResponse, pending: itemsPending } = await useAsyncData(
@@ -320,6 +354,78 @@ const getStatusClass = (status) => {
         default: return 'bg-gray-100 text-gray-800';
     }
 }
+
+
+// NEW SECTION START: EXPORT LOGIC
+const exportToCSV = async () => {
+    if (process.server) return;
+    if (!isPremium.value) {
+        alert("This is a premium feature.");
+        return;
+    }
+    const Papa = await import('papaparse').then(m => m.default || m);
+    if (filteredItems.value.length === 0) {
+        alert("No items to export.");
+        return;
+    }
+    const dataForExport = filteredItems.value.map(item => ({
+        Name: item.name,
+        Status: item.itemStatus,
+        Manufacturer: item.manufacturer || 'N/A',
+        Series: item.series || 'N/A',
+        Character: item.character || 'N/A',
+        PurchasePrice: item.purchasePrice || 0,
+        PurchaseDate: item.purchaseDate ? new Date(item.purchaseDate).toLocaleDateString() : 'N/A',
+        itags: item.itags.join(' | '),
+    }));
+    const csv = Papa.unparse(dataForExport);
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = "shelfie_collection.csv";
+    link.click();
+    URL.revokeObjectURL(link.href);
+    showExportMenu.value = false;
+};
+
+const exportToPDF = async () => {
+    if (process.server) return;
+    if (!isPremium.value) {
+        alert("This is a premium feature.");
+        return;
+    }
+    const { default: jsPDF } = await import('jspdf');
+    const { default: autoTable } = await import('jspdf-autotable');
+    if (filteredItems.value.length === 0) {
+        alert("No items to export.");
+        return;
+    }
+    const doc = new jsPDF();
+    doc.setFontSize(18);
+    doc.text(`${user.value.username}'s Shelfie Collection`, 14, 22);
+    doc.setFontSize(11);
+    doc.setTextColor(100);
+    const filterText = `Current Filter: ${filters.status}`;
+    doc.text(filterText, 14, 30);
+    const tableColumn = ["Name", "Status", "Manufacturer", "Series", "Price"];
+    const tableRows = filteredItems.value.map(item => [
+        item.name,
+        item.itemStatus,
+        item.manufacturer || '-',
+        item.series || '-',
+        item.purchasePrice ? `$${item.purchasePrice}` : '-',
+    ]);
+    autoTable(doc, {
+        head: [tableColumn],
+        body: tableRows,
+        startY: 35,
+        theme: 'grid',
+        styles: { fontSize: 8 },
+        headStyles: { fillColor: [40, 120, 190] },
+    });
+    doc.save('shelfie_collection.pdf');
+    showExportMenu.value = false;
+};
 </script>
 
 <style scoped>

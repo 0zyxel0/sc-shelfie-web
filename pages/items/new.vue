@@ -95,13 +95,13 @@
                 <!-- Description -->
                 <div class="mb-6">
                     <label for="description" class="block text-gray-700 text-sm font-bold mb-2">My Notes</label>
-                    <textarea v-model="form.description" id="description" rows="4" class="form-input" placeholder="Any details like box condition, specific version, etc."></textarea>
+                    <textarea v-model="form.description" id="description" rows="4" class="form-input ga-1" placeholder="Any details like box condition, specific version, etc."></textarea>
                 </div>
 
                 <!-- Review -->
                 <div class="mb-6">
                     <label for="review" class="block text-gray-700 text-sm font-bold mb-2">Personal Review</label>
-                    <textarea v-model="form.review" id="review" rows="4" class="form-input" placeholder="Any personal review, item condition, feedback, etc."></textarea>
+                    <textarea v-model="form.review" id="review" rows="4" class="form-input ga-1" placeholder="Any personal review, item condition, feedback, etc."></textarea>
                 </div>
 
                 <!-- isPrivate Toggle Switch -->
