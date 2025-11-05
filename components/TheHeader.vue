@@ -29,9 +29,19 @@
             <nav class="hidden md:flex items-center space-x-6 text-sm font-medium text-gray-600">
               <NuxtLink to="/showcase" class="text-gray-600 hover:text-blue-600" active-class="text-blue-600 font-semibold">Latest</NuxtLink>
               <NuxtLink to="/feed" class="text-gray-600 hover:text-blue-600" active-class="text-blue-600 font-semibold">Feed</NuxtLink>
+              <NuxtLink to="/marketplace" class="text-gray-600 hover:text-blue-600">Marketplace</NuxtLink>
               <NuxtLink to="/my-shelf" class="text-gray-600 hover:text-blue-600" active-class="text-blue-600 font-semibold">My Shelf</NuxtLink>
               <NuxtLink to="/calendar" class="text-gray-600 hover:text-blue-600" active-class="text-blue-600 font-semibold">Calendar</NuxtLink>
-              <NuxtLink to="/profile" class="text-gray-600 hover:text-blue-600" active-class="text-blue-600 font-semibold">Profile</NuxtLink>
+
+              <!-- NEW: Modified Mobile Profile link to include the Premium Badge -->
+              <NuxtLink to="/profile" @click="isMenuOpen = false" class="flex justify-between items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                <span>Profile</span>
+                <span v-if="isPremium" class="bg-gradient-to-r from-yellow-400 to-orange-500 text-white text-xs font-bold px-2 py-0.5 rounded-full flex items-center space-x-1">
+                  <Star class="w-3 h-3" fill="currentColor" />
+                  <span>Premium</span>
+                </span>
+              </NuxtLink>
+
             </nav>
 
             <!-- --- FIX: Hide button if user is already premium --- -->
@@ -52,9 +62,19 @@
               <div v-if="isMenuOpen" class="absolute top-16 right-4 w-48 bg-white rounded-md shadow-lg ring-1 ring-black ring-opacity-5 z-50">
                 <div class="py-1">
                   <NuxtLink to="/feed" @click="isMenuOpen = false" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Feed</NuxtLink>
+                  <NuxtLink to="/marketplace" @click="isMenuOpen = false" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Marketplace</NuxtLink>
                   <NuxtLink to="/my-shelf" @click="isMenuOpen = false" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">My Shelf</NuxtLink>
                   <NuxtLink to="/calendar" @click="isMenuOpen = false" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Calendar</NuxtLink>
-                  <NuxtLink to="/profile" @click="isMenuOpen = false" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Profile</NuxtLink>
+
+                  <!-- NEW: Modified Mobile Profile link to include the Premium Badge -->
+                  <NuxtLink to="/profile" @click="isMenuOpen = false" class="flex justify-between items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                    <span>Profile</span>
+                    <span v-if="isPremium" class="bg-gradient-to-r from-yellow-400 to-orange-500 text-white text-xs font-bold px-2 py-0.5 rounded-full flex items-center space-x-1">
+                      <Star class="w-3 h-3" fill="currentColor" />
+                      <span>Premium</span>
+                    </span>
+                  </NuxtLink>
+
                   <!-- --- FIX: Hide mobile link if user is already premium --- -->
                   <div v-if="!isPremium" class="border-t my-1">
                     <NuxtLink to="/go-premium" @click="isMenuOpen = false" class="block px-4 py-2 text-sm text-yellow-600 font-semibold hover:bg-gray-100">Go Premium</NuxtLink>
@@ -79,6 +99,7 @@
 
 <script setup>
 import { ref, computed } from 'vue';
+import { Star } from 'lucide-vue-next'; // NEW: Import the Star icon
 const { isPremium } = usePremiumStatus();
 
 console.log('Is Premium:', isPremium.value); // Debugging line to check the value of isPremium

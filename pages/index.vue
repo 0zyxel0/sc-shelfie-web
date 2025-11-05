@@ -1,23 +1,5 @@
 <template>
     <div class="bg-white font-sans text-gray-800">
-        <!-- Header -->
-        <!-- <header class="container mx-auto px-6 py-4 flex justify-between items-center">
-            <div class="text-2xl font-bold text-gray-900">
-                Shelfie
-            </div>
-            <nav class="hidden md:flex items-center space-x-6">
-                <a href="#" class="text-gray-600 hover:text-blue-600">Features</a>
-                <NuxtLink href="#" class="text-gray-600 hover:text-blue-600">Pricing</a>
-                <NuxtLink to="/showcase" class="text-gray-600 hover:text-blue-600">Showcase</NuxtLink>
-                <a href="#" class="text-gray-600 hover:text-blue-600">Discover</a>
-                <a href="#" class="text-gray-600 hover:text-blue-600">Latest</a>
-                <NuxtLink to="/my-shelf"class="text-gray-600 hover:text-blue-600">My Collection</NuxtLink>
-            </nav>
-            <NuxtLink to="/auth" class="bg-blue-600 text-white font-semibold py-2 px-5 rounded-lg hover:bg-blue-700 transition">
-                Sign Up
-            </NuxtLink>
-        </header> -->
-
         <!-- Hero Section -->
         <main class="container mx-auto px-6 pt-16 pb-24">
             <div class="grid lg:grid-cols-2 gap-12 items-center relative">
@@ -53,28 +35,46 @@
         <!-- Showcased Collections -->
         <section class="bg-gray-50 py-24">
             <div class="container mx-auto px-6 text-center">
-                <h2 class="text-4xl font-bold text-gray-900">Showcased Collections</h2>
-                <p class="mt-4 text-lg text-gray-600">See how collectors use Shelfie to display their passion.</p>
-                <div class="mt-12 grid md:grid-cols-2 lg:grid-cols-3 gap-8 text-left">
-                    <div v-for="collection in collections" :key="collection.title" class="bg-white rounded-2xl shadow-md overflow-hidden transform hover:-translate-y-2 transition duration-300">
+                <h2 class="text-4xl font-bold text-gray-900">Recently Added Items</h2>
+                <p class="mt-4 text-lg text-gray-600">See the latest treasures added by our passionate collectors.</p>
+
+                <!-- Loading State -->
+                <div v-if="pending" class="mt-12 text-gray-500">
+                    Loading featured items...
+                </div>
+
+                <!-- No Items State -->
+                <div v-else-if="!featuredItems || featuredItems.length === 0" class="mt-12 text-center py-16 bg-white rounded-lg border">
+                    <h3 class="text-xl font-semibold text-gray-800">No Items to Showcase</h3>
+                    <p class="text-gray-500 mt-2">Check back later to see what's new!</p>
+                </div>
+
+                <!-- Dynamic Grid -->
+                <div v-else class="mt-12 grid md:grid-cols-2 lg:grid-cols-3 gap-8 text-left">
+                    <NuxtLink v-for="item in featuredItems" :key="item.id" :to="`/items/${item.documentId}`" class="block bg-white rounded-2xl shadow-md overflow-hidden transform hover:-translate-y-2 transition duration-300 group">
                         <div class="relative">
-                            <img :src="collection.image" :alt="collection.title" class="w-full h-56 object-cover">
-                            <span class="absolute top-4 right-4 text-xs font-semibold py-1 px-3 rounded-full" :class="collection.tag.color">
-                                <component :is="collection.tag.icon" class="w-4 h-4 inline-block -mt-1 mr-1" />
-                                {{ collection.tag.name }}
+                            <img :src="item.userImages[0]?.url || '/image-placeholder.png'" :alt="item.name" class="w-full h-56 object-cover group-hover:opacity-90 transition-opacity">
+                            <span v-if="item.categories && item.categories.length > 0" class="absolute top-4 right-4 text-xs font-semibold py-1 px-3 rounded-full bg-blue-100 text-blue-800">
+                                {{ item.categories[0].name }}
                             </span>
                         </div>
                         <div class="p-6">
-                            <h3 class="text-xl font-bold text-gray-900">{{ collection.title }}</h3>
-                            <p class="mt-1 text-gray-500">{{ collection.owner }}</p>
-                            <p class="mt-4 text-blue-600 font-semibold">{{ collection.items }} items</p>
+                            <h3 class="text-xl font-bold text-gray-900 truncate">{{ item.name }}</h3>
+                            <p class="mt-1 text-gray-500 text-sm">by @{{ item.user?.username || 'unknown' }}</p>
+                            <div class="mt-4 flex items-center text-sm font-semibold text-gray-600">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1.5 text-red-500" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clip-rule="evenodd" />
+                                </svg>
+                                {{ item.likedBy?.length || 0 }} Favorites
+                            </div>
                         </div>
-                    </div>
+                    </NuxtLink>
                 </div>
-                <a href="#" class="mt-12 inline-flex items-center text-blue-600 font-semibold hover:text-blue-800 transition">
-                    Browse all collections
+
+                <NuxtLink to="/explore" class="mt-12 inline-flex items-center text-blue-600 font-semibold hover:text-blue-800 transition">
+                    Explore all items
                     <ArrowRight class="w-5 h-5 ml-1" />
-                </a>
+                </NuxtLink>
             </div>
         </section>
 
@@ -235,6 +235,24 @@ import {
     UploadCloud, PlusSquare, BarChart2, Palette, Share2, Tag, Check, X, // Changed 'Customize' to 'Palette'
     Twitter, Instagram, Facebook, Youtube
 } from 'lucide-vue-next';
+
+// --- NEW: Data Fetching for Featured Items ---
+const { find } = useStrapi();
+
+const { data: featuredItems, pending } = await useAsyncData(
+    'homepage-featured-items',
+    () => find('items', {
+        sort: 'createdAt:desc',
+        pagination: {
+            limit: 6,
+        },
+        populate: ['userImages', 'user', 'categories', 'likedBy'],
+    }),
+    {
+        transform: (response) => response.data
+    }
+);
+// --- End of New Data Fetching ---
 
 
 const collections = [

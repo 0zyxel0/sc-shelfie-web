@@ -39,6 +39,15 @@
                 <div class="flex flex-col md:flex-row md:justify-between md:items-start">
                     <div>
                         <h1 class="text-4xl md:text-5xl font-bold text-gray-900">{{ item.name }}</h1>
+                        <div v-if="item.isForSale" class="mt-3">
+                            <span class="bg-green-100 text-green-800 text-sm font-medium px-3 py-1.5 rounded-full inline-flex items-center">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1.5" viewBox="0 0 20 20" fill="currentColor">
+                                    <path d="M8.433 7.418c.158-.103.346-.196.567-.267v1.698a2.5 2.5 0 00-1.134 0v-1.698c.22.071.408.164.567.267zM11.567 7.151c.22-.071.408-.164.567-.267.16.103.346.196.567.267v1.698a2.5 2.5 0 00-1.134 0v-1.698z" />
+                                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-13a1 1 0 10-2 0v.092a4.5 4.5 0 00-1.897 1.158l.11.069a3.5 3.5 0 014.576 0l.11-.069A4.5 4.5 0 0011 5.092V5zM10 12a2.5 2.5 0 100-5 2.5 2.5 0 000 5z" clip-rule="evenodd" />
+                                </svg>
+                                For Sale
+                            </span>
+                        </div>
                         <div class="mt-4 flex flex-wrap gap-2">
                             <span v-for="tag in combinedTags" :key="tag" class="bg-blue-100 text-blue-800 text-sm font-medium px-3 py-1 rounded-full">{{ tag }}</span>
                         </div>
@@ -59,12 +68,20 @@
                         </div>
                     </div>
                     <div class="flex space-x-2 mt-4 md:mt-0 flex-shrink-0">
-                        <NuxtLink v-if="isOwner" :to="`/items/${docId}/edit`" class="action-button">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                            </svg>
-                            Edit Item
-                        </NuxtLink>
+                        <template v-if="isOwner">
+                            <!-- Show "Sell This Item" if not for sale -->
+                            <NuxtLink v-if="!item.isForSale" :to="`/marketplace/list/${docId}`" class="action-button bg-blue-600 text-white hover:bg-blue-700 border-blue-600">
+                                Sell This Item
+                            </NuxtLink>
+                            <!-- Show "Manage" and "Delist" if for sale -->
+                            <template v-else>
+                                <NuxtLink :to="`/marketplace/list/${docId}`" class="action-button">Manage Listing</NuxtLink>
+                                <button @click="delistItem" :disabled="isDelisting" class="action-button bg-red-50 hover:bg-red-100 text-red-700 border-red-200">
+                                    {{ isDelisting ? 'Delisting...' : 'Delist Item' }}
+                                </button>
+                            </template>
+                            <NuxtLink :to="`/items/${docId}/edit`" class="action-button">Edit Details</NuxtLink>
+                        </template>
                         <button @click="toggleLike" :disabled="likePending" class="action-button">
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-2" :fill="isLiked ? 'currentColor' : 'none'" :class="isLiked ? 'text-red-500' : ''" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 016.364 0L12 7.636l1.318-1.318a4.5 4.5 0 116.364 6.364L12 20.364l-7.682-7.682a4.5 4.5 0 010-6.364z" />
@@ -106,6 +123,41 @@
 
                 <!-- Right Column: Details & Review -->
                 <div class="lg:col-span-1 space-y-6">
+                    <!-- NEW: Marketplace Card (Shows if item is for sale) -->
+                    <div v-if="item.isForSale" class="bg-white p-6 rounded-lg border-2 border-green-500 shadow-lg">
+                        <h2 class="text-xl font-bold text-gray-900 mb-4">Marketplace Listing</h2>
+                        <div class="space-y-4">
+                            <div class="text-center">
+                                <p class="text-4xl font-extrabold text-gray-900">{{ formattedPrice(item.listingPrice) }}</p>
+                                <p class="text-sm text-gray-500">plus shipping</p>
+                            </div>
+
+                            <div class="text-sm space-y-2">
+                                <div class="flex justify-between"><span class="font-medium text-gray-600">Condition:</span> <span>{{ item.itemCondition || 'N/A' }}</span></div>
+                                <div class="flex justify-between"><span class="font-medium text-gray-600">Status:</span> <span class="font-semibold text-green-700">{{ item.listingStatus || 'Available' }}</span></div>
+                            </div>
+
+                            <div>
+                                <h4 class="font-medium text-gray-600 text-sm mb-1">Shipping Details</h4>
+                                <p class="text-sm text-gray-500 bg-gray-50 p-3 rounded-md border">{{ item.shippingDetails || 'Contact seller for shipping information.' }}</p>
+                            </div>
+
+                            <div v-if="item.sellerContactInfo">
+                                <h4 class="font-medium text-gray-600 text-sm mb-1">How to Purchase</h4>
+                                <p class="text-sm text-gray-500 bg-gray-50 p-3 rounded-md border">{{ item.sellerContactInfo }}</p>
+                            </div>
+
+                            <div class="pt-2">
+                                <button v-if="!isOwner" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg transition-colors">
+                                    Message Seller
+                                </button>
+                                <div v-else class="text-center text-sm text-gray-500 bg-gray-100 p-3 rounded-md">
+                                    You are the seller of this item.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Item Details Card -->
                     <div class="bg-white p-6 rounded-lg border border-gray-200">
                         <h2 class="text-xl font-bold text-gray-900 mb-4">Item Details</h2>
@@ -113,7 +165,7 @@
                             <!-- Status & Condition -->
                             <div class="grid grid-cols-2 gap-4 text-sm">
                                 <DetailItem label="Status" :value="item.itemStatus" icon="check" />
-                                <DetailItem label="Condition" value="Mint" />
+                                <DetailItem label="Condition" :value="item.itemCondition || 'Not specified'" />
                                 <DetailItem label="Box Condition" value="Perfect" />
                                 <DetailItem label="Acquired On" :value="formattedDate(item.purchaseDate)" />
                             </div>
@@ -264,6 +316,7 @@ const activeImageIndex = ref(0);
 const likePending = ref(false);
 const commentPending = ref(false);
 const newComment = ref('');
+const isDelisting = ref(false); // NEW: For delist button loading state
 
 // --- 1. Fetch main item data ---
 const { data: item, pending, error } = await useAsyncData(
@@ -361,6 +414,28 @@ const postComment = async () => {
         alert('Failed to post comment.');
     } finally {
         commentPending.value = false;
+    }
+};
+
+const delistItem = async () => {
+    if (!confirm('Are you sure you want to remove this item from the marketplace? This will not delete the item from your collection.')) {
+        return;
+    }
+    isDelisting.value = true;
+    try {
+        await update('items', docId, {
+            isForSale: false,
+            listingPrice: null, // Good practice to nullify the price
+            listingStatus: 'Delisted' // Optional: Update status
+        });
+        // Refresh the page data to show the changes
+        await refreshItem();
+        // Or you could use: reloadNuxtApp();
+    } catch (e) {
+        console.error("Failed to delist item:", e);
+        alert('There was an error delisting your item. Please try again.');
+    } finally {
+        isDelisting.value = false;
     }
 };
 </script>
