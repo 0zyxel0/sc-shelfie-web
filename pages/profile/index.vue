@@ -2,7 +2,7 @@
   <div>
     <main class="container mx-auto py-8 px-4">
 
-      <div v-if="user && !user.emailVerified" class="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 rounded-md shadow-md mb-8" role="alert">
+      <div v-if="user && !user.confirmed" class="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 rounded-md shadow-md mb-8" role="alert">
         <div class="flex">
           <div class="py-1">
             <svg class="h-6 w-6 text-yellow-500 mr-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
