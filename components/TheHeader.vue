@@ -34,12 +34,8 @@
               <NuxtLink to="/calendar" class="text-gray-600 hover:text-blue-600" active-class="text-blue-600 font-semibold">Calendar</NuxtLink>
 
               <!-- NEW: Modified Mobile Profile link to include the Premium Badge -->
-              <NuxtLink to="/profile" @click="isMenuOpen = false" class="flex justify-between items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
-                <span>Profile</span>
-                <span v-if="isPremium" class="bg-gradient-to-r from-yellow-400 to-orange-500 text-white text-xs font-bold px-2 py-0.5 rounded-full flex items-center space-x-1">
-                  <Star class="w-3 h-3" fill="currentColor" />
-                  <span>Premium</span>
-                </span>
+              <NuxtLink to="/profile" @click="isMenuOpen = false" class="text-gray-600 hover:text-blue-600">
+                <span>Profile </span>
               </NuxtLink>
 
             </nav>
@@ -67,12 +63,8 @@
                   <NuxtLink to="/calendar" @click="isMenuOpen = false" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Calendar</NuxtLink>
 
                   <!-- NEW: Modified Mobile Profile link to include the Premium Badge -->
-                  <NuxtLink to="/profile" @click="isMenuOpen = false" class="flex justify-between items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                  <NuxtLink to="/profile" @click="isMenuOpen = false" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
                     <span>Profile</span>
-                    <span v-if="isPremium" class="bg-gradient-to-r from-yellow-400 to-orange-500 text-white text-xs font-bold px-2 py-0.5 rounded-full flex items-center space-x-1">
-                      <Star class="w-3 h-3" fill="currentColor" />
-                      <span>Premium</span>
-                    </span>
                   </NuxtLink>
 
                   <!-- --- FIX: Hide mobile link if user is already premium --- -->

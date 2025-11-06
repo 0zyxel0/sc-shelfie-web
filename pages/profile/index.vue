@@ -33,12 +33,19 @@
           </div>
           <!-- User Info -->
           <div class="flex-1 text-center sm:text-left">
-            <h1 class="text-3xl font-bold text-gray-800">{{ user.displayName || user.username }}</h1>
+            <h1 class="text-3xl font-bold text-gray-800">{{ user.displayName || user.username }}
+              <span v-if="isPremium" class="ml-3 mt-1 inline-flex items-center px-0.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                <Star class="w-3 h-3" fill="currentColor" />
+                <span>Premium Member</span>
+              </span>
+            </h1>
+
             <span v-if="user.emailVerified" class="ml-3 mt-1 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800" title="Email Verified">
               <svg class="-ml-0.5 mr-1.5 h-4 w-4 text-green-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                 <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
               </svg>
               Verified
+
             </span>
             <p class="text-md text-gray-500">@{{ user.username }}</p>
             <p class="text-sm text-gray-400 mt-1">Member since {{ memberSince }}</p>
@@ -103,9 +110,12 @@
 </template>
 
 <script setup>
+import { Star } from 'lucide-vue-next'; // NEW: Import the Star icon
 import { reloadNuxtApp } from "nuxt/app";
 // REMOVE: `qs` is now used on the server, not the client.
 // import qs from 'qs';
+
+const { isPremium } = usePremiumStatus();
 
 definePageMeta({ middleware: 'auth' });
 
