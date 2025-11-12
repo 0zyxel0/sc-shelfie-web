@@ -6,7 +6,7 @@
     </div>
     <!-- END: Loading Modal Indicator -->
 
-    <!-- START: NEW Confirmation Modal -->
+    <!-- START: Registration Confirmation Modal -->
     <div v-if="showConfirmationModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" @click="showConfirmationModal = false">
         <div class="bg-white p-8 rounded-lg shadow-md w-full max-w-md text-center" @click.stop>
             <svg class="w-16 h-16 mx-auto text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
@@ -21,7 +21,7 @@
             </button>
         </div>
     </div>
-    <!-- END: NEW Confirmation Modal -->
+    <!-- END: Registration Confirmation Modal -->
 
 
     <div class="min-h-screen flex items-center justify-center bg-gray-100">
@@ -34,8 +34,22 @@
             <!-- Form -->
             <form @submit.prevent="handleAuth">
 
-                <!-- Error Message Display -->
-                <div v-if="errorMessage" class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4" role="alert">
+                <!-- Success Message Display (for resending email) -->
+                <div v-if="successMessage" class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded relative mb-4" role="alert">
+                    <span class="block sm:inline">{{ successMessage }}</span>
+                </div>
+
+                <!-- Unconfirmed Account Alert with Resend Link -->
+                <div v-if="showResendVerificationLink" class="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 mb-4" role="alert">
+                    <p class="font-bold">Confirmation Required</p>
+                    <p>{{ errorMessage }}</p>
+                    <a href="#" @click.prevent="resendVerificationEmail" :class="['font-bold underline hover:text-yellow-800', { 'pointer-events-none text-gray-500': isResending }]">
+                        {{ isResending ? 'Sending...' : 'Resend verification email' }}
+                    </a>
+                </div>
+
+                <!-- General Error Message Display -->
+                <div v-if="errorMessage && !showResendVerificationLink" class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4" role="alert">
                     <span class="block sm:inline">{{ errorMessage }}</span>
                 </div>
 
@@ -62,7 +76,7 @@
                     <input v-model="password" type="password" id="password" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 mb-3 leading-tight focus:outline-none focus:shadow-outline" required />
                 </div>
 
-                <!-- CONFIRM Password Field (New) -->
+                <!-- Confirm Password Field (Register Mode Only) -->
                 <div v-if="isRegisterMode" class="mb-6">
                     <label for="confirm-password" class="block text-gray-700 text-sm font-bold mb-2">Confirm Password</label>
                     <input v-model="confirmPassword" type="password" id="confirm-password" :class="['shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 mb-3 leading-tight focus:outline-none focus:shadow-outline', { 'border-red-500': passwordMismatch }]" required />
@@ -101,45 +115,60 @@ import { ref, computed } from 'vue';
 
 definePageMeta({ layout: false })
 const { login, register } = useStrapiAuth()
+const client = useStrapiClient()
 const router = useRouter()
 
+// Form field state
 const username = ref('')
 const email = ref('')
 const password = ref('')
 const confirmPassword = ref('')
-const isRegisterMode = ref(false)
-const errorMessage = ref(null)
-const isLoading = ref(false)
 
-// --- NEW: State for confirmation modal ---
+// UI/Mode state
+const isRegisterMode = ref(false)
+const isLoading = ref(false)
 const showConfirmationModal = ref(false)
+
+// User feedback state
+const errorMessage = ref(null)
+const successMessage = ref(null)
+
+// Email resend state
+const showResendVerificationLink = ref(false);
+const isResending = ref(false);
+
 
 const passwordMismatch = computed(() => {
     return isRegisterMode.value && password.value !== confirmPassword.value && confirmPassword.value.length > 0;
 })
 
-// --- NEW: Helper function to clear form fields ---
 const clearForm = () => {
     username.value = '';
     email.value = '';
     password.value = '';
     confirmPassword.value = '';
-    errorMessage.value = null; // Also clear any previous errors
+    errorMessage.value = null;
 };
 
 /**
- * Takes a Strapi error object and returns a user-friendly string.
+ * Takes a Strapi error object and returns a user-friendly string,
+ * or sets a flag if the user's email is not confirmed.
  * @param {Error} error The error object caught from the API call.
  * @returns {string} A user-friendly error message.
  */
 const mapStrapiError = (error) => {
-    console.log("Mapping Strapi Error:", error);
     const errorDetails = error.error;
     if (!errorDetails) {
         return 'An unexpected server error occurred. Please try again.';
     }
 
     const message = (errorDetails.message || '').toLowerCase();
+
+    // Check for the specific unconfirmed account error
+    if (message.includes('your account email is not confirmed')) {
+        showResendVerificationLink.value = true;
+        return 'Please check your inbox to confirm your account.';
+    }
 
     switch (message) {
         case 'invalid identifier or password':
@@ -159,15 +188,48 @@ const mapStrapiError = (error) => {
     }
 }
 
+/**
+ * Calls the Strapi endpoint to resend the confirmation email.
+ */
+const resendVerificationEmail = async () => {
+    if (!email.value) {
+        errorMessage.value = "Please enter your email address first.";
+        return;
+    }
+    isResending.value = true;
+    errorMessage.value = null;
+    successMessage.value = null;
+
+    try {
+        await client('/auth/send-email-confirmation', {
+            method: 'POST',
+            body: { email: email.value },
+        });
+        successMessage.value = `A new confirmation email has been sent to ${email.value}. Please check your inbox.`;
+        showResendVerificationLink.value = false;
+    } catch (e) {
+        errorMessage.value = "Failed to resend email. Please ensure the email address is correct and try again.";
+        console.error("Resend Error:", e);
+    } finally {
+        isResending.value = false;
+    }
+};
+
+/**
+ * Handles the main authentication logic for both login and registration.
+ */
 const handleAuth = async () => {
-    errorMessage.value = null
+    // Reset state for a new attempt
+    errorMessage.value = null;
+    successMessage.value = null;
+    showResendVerificationLink.value = false;
     isLoading.value = true;
 
     try {
         if (isRegisterMode.value) {
             if (passwordMismatch.value) {
                 errorMessage.value = 'Passwords do not match.';
-                return;
+                return; // Return early without finally block
             }
 
             await register({
@@ -176,18 +238,9 @@ const handleAuth = async () => {
                 password: password.value
             });
 
-            // --- MODIFIED: Handle successful registration with email confirmation ---
-            // 1. Show the confirmation modal
             showConfirmationModal.value = true;
-
-            // 2. Clear the form fields
             clearForm();
-
-            // 3. Switch back to login mode so the user can log in after confirming
             isRegisterMode.value = false;
-
-            // Old redirect logic removed:
-            // router.push('/profile/edit')
 
         } else {
             await login({ identifier: email.value, password: password.value })
@@ -197,6 +250,7 @@ const handleAuth = async () => {
         errorMessage.value = mapStrapiError(e);
         console.error("Auth Error:", e.response?.data || e.message);
     } finally {
+        // This runs for all outcomes except the early return
         isLoading.value = false;
     }
 }

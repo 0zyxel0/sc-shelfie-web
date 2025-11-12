@@ -34,7 +34,7 @@
           <!-- User Info -->
           <div class="flex-1 text-center sm:text-left">
             <h1 class="text-3xl font-bold text-gray-800">{{ user.displayName || user.username }}
-              <span v-if="isPremium" class="ml-3 mt-1 inline-flex items-center px-0.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+              <span v-if="isPremium" class="ml-3 mt-1 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
                 <Star class="w-3 h-3" fill="currentColor" />
                 <span>Premium Member</span>
               </span>
@@ -129,6 +129,8 @@ const { find } = useStrapi();
 const client = useStrapiClient();
 const router = useRouter();
 const config = useRuntimeConfig();
+
+console.log("User data from useStrapiUser:", user.value);
 useHead({
   title: () => user.value ? `${user.value.displayName || user.value.username}'s Profile` : 'My Profile'
 });

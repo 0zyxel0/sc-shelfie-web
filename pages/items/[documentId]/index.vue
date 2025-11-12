@@ -166,25 +166,18 @@
                             <div class="grid grid-cols-2 gap-4 text-sm">
                                 <DetailItem label="Status" :value="item.itemStatus" icon="check" />
                                 <DetailItem label="Condition" :value="item.itemCondition || 'Not specified'" />
-                                <DetailItem label="Box Condition" value="Perfect" />
                                 <DetailItem label="Acquired On" :value="formattedDate(item.purchaseDate)" />
                             </div>
                             <hr />
                             <!-- Acquisition -->
                             <div class="grid grid-cols-2 gap-4 text-sm">
                                 <DetailItem label="Price" :value="formattedPrice(item.purchasePrice)" icon="price" />
-                                <DetailItem label="Shop" value="SideShow Collectibles" icon="shop" />
                             </div>
                             <hr />
                             <!-- Specifications -->
                             <div class="grid grid-cols-2 gap-4 text-sm">
                                 <DetailItem label="Manufacturer" :value="item.manufacturer?.name" />
                                 <DetailItem label="Series" :value="item.series?.name" />
-                                <DetailItem label="Scale" value="1/4" />
-                                <DetailItem label="Material" value="Polystone" />
-                                <DetailItem label="Height" value="52 cm" />
-                                <DetailItem label="Weight" value="4.5 kg" />
-                                <DetailItem label="Release Date" value="2023-03" />
                             </div>
                             <hr />
 

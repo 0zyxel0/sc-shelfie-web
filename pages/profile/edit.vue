@@ -123,7 +123,7 @@ const { data: freshUserData } = await useAsyncData(
     if (!user.value?.id) return null;
     // Find the user entity and populate the profile picture
     return await findOne('users', user.value.id, {
-      populate: ['profilePicture']
+      populate: '*',
     });
   },
   { server: true, watch: [() => user.value?.id] }
@@ -197,32 +197,43 @@ const handleUpdate = async () => {
 
   try {
     // A. Construct JSON Payload
-    const jsonPayload = {
-      displayName: form.displayName,
-      birthDate: form.birthDate,
-    };
 
-    const formData = new FormData();
-    formData.append('data', JSON.stringify(jsonPayload)); // Append JSON entity data
 
+    let imageIds = [];
+    let profilePictureId = freshUserData.value?.profilePicture?.id || null;
     // B. Handle File Upload (only if a new file is selected)
     if (profilePictureFile.value) {
+      console.log("Uploading new profile picture...");
+      const formData = new FormData();
       // files.<relationName>: 'profilePicture' is the name of the relation field on the User entity
-      formData.append('files.profilePicture', profilePictureFile.value);
-    }
-    // Note: If no file is selected, the file field is skipped, and the JSON data updates the text fields.
+      formData.append('files', profilePictureFile.value);
 
-    // C. Execute Multipart PUT request to update the user entity
-    const updatedUser = await client(`/users/${user.value.id}`, {
-      method: 'PUT',
-      body: formData,
+      const uploadedFiles = await client(`/upload`, {
+        method: "POST",
+        body: formData,
+      });
+
+      profilePictureId = uploadedFiles[0].id;
+    }
+    const customPayload = {
+      displayName: form.displayName,
+      birthDate: form.birthDate,
+      // Pass the file ID to the custom backend controller
+      profilePicture: profilePictureId,
+    };
+
+    // C. Execute PUT request to the EXTENDED users-permissions route
+    // URL: /api/users/me/profile
+    const updatedUser = await client('/users/me/profile', {
+      method: "PUT",
+      body: customPayload,
     });
 
     // D. Success Handling: Update global user state (assuming useStrapiUser has a refresh mechanism)
     // For now, we manually refresh the data fetched on this page and rely on the next page load.
     // If you have a global refresh function on useStrapiUser (e.g., `refreshUser`), call it here.
 
-    router.push('/profile'); // Redirect to view profile
+    window.location.href = '/profile'; // Redirect to view profile
 
   } catch (e) {
     errorMessage.value = e.response?.data?.error?.message || "Failed to update profile. Please try again.";

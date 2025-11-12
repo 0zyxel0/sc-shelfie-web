@@ -267,7 +267,7 @@ const { data: itemsResponse, pending: itemsPending } = await useAsyncData(
         const userId = user.value?.id;
         if (!userId) return null;
         return await find('items', {
-            populate: ['userImages', 'categories', 'itags'],
+            populate: "*",
             filters: { user: { id: { '$eq': userId } } },
             pagination: { pageSize: 2500 },
             sort: ['createdAt:desc'],
@@ -407,13 +407,17 @@ const exportToPDF = async () => {
     doc.setTextColor(100);
     const filterText = `Current Filter: ${filters.status}`;
     doc.text(filterText, 14, 30);
-    const tableColumn = ["Name", "Status", "Manufacturer", "Series", "Price"];
+    const tableColumn = ["Name", "Status", "Manufacturer", "Series", "Character", "Purchase Date", "Price", "Review", "Description"];
     const tableRows = filteredItems.value.map(item => [
         item.name,
         item.itemStatus,
         item.manufacturer || '-',
         item.series || '-',
+        item.character || '-',
+        item.purchaseDate ? new Date(item.purchaseDate).toLocaleDateString() : '-',
         item.purchasePrice ? `$${item.purchasePrice}` : '-',
+        item.review || '-',
+        item.description ? item.description.substring(0, 30) + (item.description.length > 30 ? '...' : '') : '-'
     ]);
     autoTable(doc, {
         head: [tableColumn],
